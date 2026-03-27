@@ -310,6 +310,19 @@
         <span class="pill pill-qb">Quantum B</span>
         <div class="sum-row" id="sum-qb"><span style="color:var(--muted)">Not placed</span></div>
       </div>
+      <div>
+        <span class="pill pill-q">θ — Quantum Bias</span>
+        <div class="sum-row" style="display:flex;flex-direction:column;gap:0.35rem;margin-top:0.3rem;">
+          <div style="display:flex;align-items:center;gap:0.6rem;">
+            <input type="range" id="theta-slider" min="0" max="314" value="157" step="1"
+                   style="flex:1;accent-color:var(--accent);cursor:pointer;"
+                   oninput="handleThetaChange(this.value)">
+            <span id="theta-val" style="color:var(--accent);min-width:4.5em;text-align:right;font-size:0.8rem;">π/2</span>
+          </div>
+          <div id="theta-probs" style="font-size:0.72rem;color:var(--muted);"></div>
+        </div>
+      </div>
+
       <div class="setup-step-box" style="margin-top:0.5rem;font-size:0.8rem;">
         <strong style="color:var(--accent)">Quantum ship rules:</strong><br>
         Hit <em>neither</em> placement → miss<br>
@@ -412,8 +425,8 @@ const GS = 7;  // grid size
 
 // ── App state ──────────────────────────────────────────────────
 const sd = {            // setup data for both players
-  p1: { cl: null, qa: null, qb: null },
-  p2: { cl: null, qa: null, qb: null },
+  p1: { cl: null, qa: null, qb: null, theta: Math.PI / 2 },
+  p2: { cl: null, qa: null, qb: null, theta: Math.PI / 2 },
 };
 let setupPlayer = 1;    // which player is setting up (1 or 2)
 let setupStep   = 'cl'; // 'cl' | 'qa' | 'qb'
@@ -519,7 +532,11 @@ function initSetup(pNum) {
   setupPlayer = pNum;
   setupStep   = 'cl';
   sel         = [];
-  sd[`p${pNum}`] = { cl: null, qa: null, qb: null };
+  sd[`p${pNum}`] = { cl: null, qa: null, qb: null, theta: Math.PI / 2 };
+
+  // Reset theta slider to π/2
+  document.getElementById('theta-slider').value = 157;
+  handleThetaChange(157);
 
   document.getElementById('setup-player-lbl').textContent = `Player ${pNum} Setup`;
   updateStepUI();
@@ -630,6 +647,23 @@ function finishPlayerSetup() {
   }
 }
 
+// ── Theta slider ───────────────────────────────────────────────
+function handleThetaChange(val) {
+  const theta = val / 100;   // 0–314 → 0–π
+  sd[`p${setupPlayer}`].theta = theta;
+  const pA = Math.cos(theta / 2) ** 2;
+  const pB = Math.sin(theta / 2) ** 2;
+  const label = Math.abs(theta - Math.PI / 2) < 0.01 ? 'π/2'
+              : Math.abs(theta - Math.PI) < 0.01       ? 'π'
+              : Math.abs(theta) < 0.01                  ? '0'
+              : theta.toFixed(2) + ' rad';
+  document.getElementById('theta-val').textContent = label;
+  document.getElementById('theta-probs').innerHTML =
+    `<span style="color:var(--qa)">P(A) = ${Math.round(pA * 100)}%</span>` +
+    `&nbsp;&nbsp;` +
+    `<span style="color:var(--qb)">P(B) = ${Math.round(pB * 100)}%</span>`;
+}
+
 // ── Handoff ────────────────────────────────────────────────────
 function showHandoff(title, sub, cb) {
   document.getElementById('handoff-title').textContent = title;
@@ -650,6 +684,7 @@ async function startGame() {
     body: JSON.stringify({
       p1_classical: d.p1.cl, p1_qa: d.p1.qa, p1_qb: d.p1.qb,
       p2_classical: d.p2.cl, p2_qa: d.p2.qa, p2_qb: d.p2.qb,
+      p1_theta: d.p1.theta, p2_theta: d.p2.theta,
     }),
   });
   const data = await res.json();

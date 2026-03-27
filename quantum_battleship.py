@@ -21,6 +21,10 @@ import math
 import random
 from typing import List, Tuple, Optional, Set
 
+import requests
+
+QUOKKA_URL = "http://quokka3.quokkacomputing.com/qsim/qasm"
+
 GRID_SIZE = 7
 SHIP_LENGTH = 3
 
@@ -88,9 +92,16 @@ def generate_collapse_qasm(theta: float) -> str:
 
 
 def simulate_collapse(theta: float) -> int:
-    """Sample the circuit. Returns 0 (Placement A) or 1 (Placement B)."""
-    p_b = math.sin(theta / 2) ** 2
-    return random.choices([0, 1], weights=[1 - p_b, p_b])[0]
+    """Execute the collapse circuit on Quokka. Returns 0 (Placement A) or 1 (Placement B).
+    Falls back to local weighted sampling if Quokka is unreachable."""
+    qasm = generate_collapse_qasm(theta)
+    try:
+        response = requests.post(QUOKKA_URL, json={"script": qasm, "count": 1}, timeout=10)
+        outcome = response.json()["result"]["c"][0][0]
+        return int(outcome)
+    except Exception:
+        p_b = math.sin(theta / 2) ** 2
+        return random.choices([0, 1], weights=[1 - p_b, p_b])[0]
 
 
 # ---------------------------------------------------------------------------

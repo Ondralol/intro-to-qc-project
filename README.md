@@ -87,3 +87,11 @@ Then open `http://127.0.0.1:5000` in your browser.
 | `POST` | `/reset` | Reset the game |
 
 ---
+
+## Planned Features
+
+- **Entanglement** — linking two ships so a hit on one affects the other
+- **Quantum sonar** — a special ability using quantum interference to probe a tile with certainty
+- **AI opponent** — single-player mode
+- **Multiplayer** — real-time networked play via WebSockets (Flask-SocketIO + React frontend)
+- **BB84 minigame** — a quantum key distribution minigame that grants in-game advantages

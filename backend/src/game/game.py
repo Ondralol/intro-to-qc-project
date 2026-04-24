@@ -14,7 +14,7 @@ class GamePhase(Enum):
 
 @dataclass
 class Target:
-    size: str  # "1x2", "2x2", "2x3", "1x4"
+    size: str  # "1x1", "1x2", "1x3", "2x2"
     anchor_a: list[tuple[int, int]] # array of coordinates
     anchor_b: list[tuple[int, int]] # array of coordinates
     theta: float  # Ry angle in radians, set by player during placement
@@ -25,7 +25,7 @@ class Target:
 
 class Game:
     ENTANGLED_PAIRS = [(0, 1), (2, 3)]
-    QUBIT_BY_SIZE = {"1x2": 0, "2x2": 1, "2x3": 2, "1x4": 3}
+    QUBIT_BY_SIZE = {"1x1": 0, "1x2": 1, "1x3": 2, "2x2": 3}
     GRID_SIZE = 7
 
     def __init__(self, game_id, player_a_id):

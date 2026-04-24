@@ -26,7 +26,7 @@ class GameManager:
             return game, False
 
         # Create new game if nobody is waiting
-        game_id = uuid.uuid4()
+        game_id = uuid.uuid4().hex[:8]
         game = Game(game_id, player_id)
         self.games[game_id] = game
         self.players[player_id] = game_id

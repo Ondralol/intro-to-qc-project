@@ -11,6 +11,6 @@ Python + Flask + Flask-SocketIO
 
 ```bash
 uv sync
-uv run python app.py
+uv run python src/main.py
 ```
 

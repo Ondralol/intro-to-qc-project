@@ -120,6 +120,15 @@ class Game:
             # Select who plays first
             self.current_turn = random.choice([self.player_a_id, self.player_b_id])
 
+
+    def play_puzzle(self):
+        # TODO
+        pass
+
+    def fire(self, player_id, coord):
+        # TODO Handle all cases based on design doc
+        pass
+
     def disconnected(self):
         self.phase = GamePhase.DISCONNECTED
 

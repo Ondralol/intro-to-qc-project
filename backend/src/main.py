@@ -62,6 +62,14 @@ def handle_place_targets(data):
     except ValueError as e:
         emit("error", {"message": str(e)})
 
+
+# Fired when a player submits their turn
+@socketio.on("play_turn")
+def handle_play_turn(data):
+    # TODO
+    # inside the data decide if the turn is puzzle or shot and base logic on that
+    pass   
+
 def main():
     socketio.run(app, host="0.0.0.0", port=5000, debug=True)
 

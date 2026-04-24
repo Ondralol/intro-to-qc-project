@@ -9,6 +9,7 @@ class GamePhase(Enum):
     PLACEMENT = "placement"
     FIRING = "firing"
     FINISHED = "finished"
+    DISCONNECTED = "disconnected"
 
 
 @dataclass
@@ -118,3 +119,8 @@ class Game:
             self.phase = GamePhase.FIRING
             # Select who plays first
             self.current_turn = random.choice([self.player_a_id, self.player_b_id])
+
+    def disconnected(self):
+        self.phase = GamePhase.DISCONNECTED
+
+        

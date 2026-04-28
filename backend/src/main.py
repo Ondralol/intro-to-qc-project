@@ -66,9 +66,82 @@ def handle_place_targets(data):
 # Fired when a player submits their turn
 @socketio.on("play_turn")
 def handle_play_turn(data):
-    # TODO
-    # inside the data decide if the turn is puzzle or shot and base logic on that
-    pass   
+    try:
+        game = manager.get_game_for_player(request.sid)
+
+        # Enforce turn order
+        if game.current_turn != request.sid:
+            emit("error", {"message": "Not your turn"})
+            return
+
+        action_type = data.get("type")
+        payload = data.get("payload", {})
+
+        # ---------------------------
+        # CASE 1: SHOT
+        # ---------------------------
+        if action_type == "shot":
+            tile = payload.get("tile")
+
+            result = game.process_shot(request.sid, tile)
+
+            # Broadcast result to both players
+            emit("shot_result", result, to=game.game_id)
+
+            # Check win condition
+            if game.check_winner():
+                emit("game_over", {"winner": request.sid}, to=game.game_id)
+                return
+
+            # Switch turn
+            game.switch_turn()
+            emit("turn_changed", {"current_turn": game.current_turn}, to=game.game_id)
+
+        # ---------------------------
+        # CASE 2: PUZZLE
+        # ---------------------------
+        elif action_type == "puzzle":
+            gate_sequence = payload.get("gates", [])
+            initial_state = payload.get("initial_state", "|0>")
+            target_outcome = payload.get("target", "1")
+
+            result = game.evaluate_puzzle(
+                gate_sequence=gate_sequence,
+                initial_state=initial_state,
+                target_outcome=target_outcome
+            )
+
+            emit("puzzle_result", result, to=request.sid)
+
+            # Unlock radar if passed
+            if result["passed"]:
+                game.unlock_radar(request.sid)
+
+        # ---------------------------
+        # CASE 3: RADAR
+        # ---------------------------
+        elif action_type == "radar":
+            if not game.can_use_radar(request.sid):
+                emit("error", {"message": "Radar not unlocked"})
+                return
+
+            tiles = payload.get("tiles", [])
+
+            scan_qubits = game.map_tiles_to_qubits(tiles)
+
+            result = game.run_radar(scan_qubits)
+
+            emit("radar_result", result, to=request.sid)
+
+            # Radar usually consumes turn (depends on your design)
+            game.switch_turn()
+            emit("turn_changed", {"current_turn": game.current_turn}, to=game.game_id)
+
+        else:
+            emit("error", {"message": "Invalid action type"})
+
+    except ValueError as e:
+        emit("error", {"message": str(e)}) 
 
 def main():
     socketio.run(app, host="0.0.0.0", port=5000, debug=True)

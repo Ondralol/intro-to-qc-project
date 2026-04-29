@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { socket } from '../socket'
+import Board, { cellKey } from './Board'
 
-const GRID = 7
 const SIZES = ['1x1', '1x2', '1x3', '2x2'] as const
 type Size = typeof SIZES[number]
 
@@ -13,7 +13,7 @@ type TargetPlacement = { anchor_a: Coord[]; anchor_b: Coord[]; theta: number }
 type Placements = Record<Size, TargetPlacement>
 
 const initPlacements = (): Placements =>
-  Object.fromEntries(SIZES.map(s => [s, { anchor_a: [], anchor_b: [], theta: Math.PI / 4 }])) as Placements
+  Object.fromEntries(SIZES.map(s => [s, { anchor_a: [], anchor_b: [], theta: Math.PI / 4 }])) as unknown as Placements
 
 // Colour per target for visual distinction
 const TARGET_COLOURS: Record<Size, { a: string; b: string }> = {
@@ -44,7 +44,6 @@ export default function Placement() {
     const alreadyInThisAnchor = current.some(([r, c]) => r === row && c === col)
 
     if (alreadyInThisAnchor) {
-      // Deselect
       setPlacements(prev => ({
         ...prev,
         [activeSize]: { ...prev[activeSize], [anchorKey]: current.filter(([r, c]) => !(r === row && c === col)) },
@@ -52,7 +51,6 @@ export default function Placement() {
       return
     }
 
-    // Don't allow placing if tile is taken by anything else
     if (getCell(row, col) !== null) return
     if (current.length >= TILE_COUNT[activeSize]) return
 
@@ -75,6 +73,13 @@ export default function Placement() {
     }))
     socket.emit('place_targets', { targets })
     setSubmitted(true)
+  }
+
+  // Build cell colour map for Board
+  const cellColors: Record<string, string> = {}
+  for (const s of SIZES) {
+    for (const [r, c] of placements[s].anchor_a) cellColors[cellKey(r, c)] = TARGET_COLOURS[s].a
+    for (const [r, c] of placements[s].anchor_b) cellColors[cellKey(r, c)] = TARGET_COLOURS[s].b
   }
 
   return (
@@ -120,33 +125,11 @@ export default function Placement() {
         />
       </label>
 
-      {/* Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${GRID}, 40px)`, gap: 2 }}>
-        {Array.from({ length: GRID }, (_, row) =>
-          Array.from({ length: GRID }, (_, col) => {
-            const cell = getCell(row, col)
-            let bg = '#1e1e1e'
-            if (cell) {
-              bg = cell.anchor === 'A' ? TARGET_COLOURS[cell.size].a : TARGET_COLOURS[cell.size].b
-            }
-            const label = `${String.fromCharCode(65 + row)}${col + 1}`
-            return (
-              <div
-                key={label}
-                onClick={() => handleCellClick(row, col)}
-                style={{
-                  width: 40, height: 40, background: bg,
-                  border: '1px solid #333', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10, color: '#aaa', userSelect: 'none',
-                }}
-              >
-                {label}
-              </div>
-            )
-          })
-        )}
-      </div>
+      <Board
+        cellColors={cellColors}
+        onCellClick={handleCellClick}
+        disabled={submitted}
+      />
 
       <button onClick={handleSubmit} disabled={!allPlaced || submitted}>
         {submitted ? 'Waiting for opponent...' : 'Confirm Placement'}

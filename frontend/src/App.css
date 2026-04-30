@@ -6,12 +6,9 @@
 
 body {
   font-family: sans-serif;
-  background: #111;
+  background: #0d0f1a;
   color: #eee;
   min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 button {
@@ -47,4 +44,6 @@ h1, h2 {
   align-items: center;
   gap: 12px;
   padding: 32px;
+  min-height: 100vh;
+  justify-content: center;
 }

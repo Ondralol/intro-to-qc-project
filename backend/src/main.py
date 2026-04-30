@@ -66,10 +66,16 @@ def handle_place_targets(data):
 # Fired when a player submits their turn
 @socketio.on("play_turn")
 def handle_play_turn(data):
-    # TODO
     # inside the data decide if the turn is puzzle or shot and base logic on that
-    pass   
-
+    game = manager.get_game_for_player(request.sid)
+    if data["type"] == "puzzel":
+        result = game.play_puzzle(data["gates"])
+        emit("puzzle_result", result, to=request.sid)
+    elif data["type"] == "shot":
+        result=game.fire(request.sid,data["coord"])
+        emit("turn_result", result, to=request.sid)
+    else:
+        emit("Error",{"message": "Unknown turn type"}, to=request.sid)
 def main():
     socketio.run(app, host="0.0.0.0", port=5000, debug=True)
 

@@ -5,8 +5,9 @@ import Waiting from './components/Waiting'
 import Placement from './components/Placement'
 import GameReady from './components/GameReady'
 import './App.css'
+import Board from './components/Board'
 
-type Screen = 'menu' | 'waiting' | 'placement' | 'battle_ready'
+type Screen = 'menu' | 'waiting' | 'placement' | 'battle_ready' | "debug"
 
 function App() {
   const [screen, setScreen] = useState<Screen>('menu')
@@ -47,6 +48,19 @@ function App() {
       {screen === 'waiting' && <Waiting />}
       {screen === 'placement' && <Placement />}
       {screen === 'battle_ready' && <GameReady firstTurn={firstTurn} myId={myId} />}
+      {screen === 'debug' && (                                                                                                                       
+    <Board                                                                                                                                       
+      cellColors={{ 'A1': '#3a7af8ff', 'A2': '#0055ffff', 'A7': '#34ff0bff' }}
+      hitCells={new Set(['B4'])}                                                                                                                 
+      destroyedCells={new Set(['B2'])}
+      missCells={new Set(['C3'])}                                                                                                                
+      pingCells={new Set(['D4'])}
+      selectedCell="E5"                                                                                                                          
+      radarArea={new Set(['F1', 'F2', 'G1', 'G2'])}                                                                                              
+      probabilityMap={{ 'F1': 0.8, 'F2': 0.3, 'G1': 0.6, 'G2': 0.1 }}                                                                            
+      onCellClick={(r, c) => console.log(r, c)}                                                                                                  
+    />                                                                                                                                           
+  )}    
     </>
   )
 }

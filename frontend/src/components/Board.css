@@ -1,0 +1,24 @@
+.board-wrapper {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.board-cell {
+  position: relative;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+
+.board-cell:hover {
+  filter: brightness(1.3);
+}
+
+.board-cell.disabled {
+  cursor: default;
+}
+
+.board-cell.disabled:hover {
+  filter: none;
+}

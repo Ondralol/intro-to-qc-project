@@ -14,7 +14,7 @@ export default function Menu({ onPlay }: Props) {
         <div className="menu-title-block">
           <h1 className="menu-title">Entangled Targets</h1>
           <p className="menu-subtitle">
-            A quantum battleship game — place your targets in superposition, entangle them, and outsmart your opponent.
+            A quantum battleship game - place your targets in superposition, entangle them, and outsmart your opponent.
           </p>
         </div>
 
@@ -38,7 +38,7 @@ export default function Menu({ onPlay }: Props) {
               <span className="step-num">1</span>
               <div>
                 <strong>Place your targets</strong>
-                <p>You have a 7×7 grid and 4 targets of different sizes. Each target has two possible anchor positions (A and B) — place both to define where the target could be. Targets start in quantum superposition between Anchor A and Anchor B.</p>
+                <p>You have a 7×7 grid and 4 targets of different sizes. Each target has two possible anchor positions (A and B), place both to define where the target could be. Targets start in quantum superposition between Anchor A and Anchor B.</p>
               </div>
             </div>
 
@@ -46,7 +46,7 @@ export default function Menu({ onPlay }: Props) {
               <span className="step-num">2</span>
               <div>
                 <strong>Take turns firing shots</strong>
-                <p>Click any cell on the opponent's grid to fire. If you hit an anchor belonging to a target in superposition, the quantum state collapses — you find out whether the target was really there. Targets are entangled in pairs, so collapsing one also reveals a ping for its partner.</p>
+                <p>Click any cell on the opponent's grid to fire. If you hit an anchor belonging to a target in superposition, the quantum state collapses and you find out whether the target was really there. Targets are entangled in pairs, so collapsing one also reveals a ping for its partner.</p>
               </div>
             </div>
 
@@ -54,7 +54,7 @@ export default function Menu({ onPlay }: Props) {
               <span className="step-num">3</span>
               <div>
                 <strong>Unlock the Radar ability</strong>
-                <p>Solve a short quantum circuit puzzle to earn a radar charge. Then scan any 3×3 area: targets still in superposition appear with ~50/50 probability, while collapsed targets are shown exactly.</p>
+                <p>Solve a short quantum circuit puzzle to earn a radar charge. Then scan any 3×3 area TODO</p>
               </div>
             </div>
 
@@ -62,20 +62,8 @@ export default function Menu({ onPlay }: Props) {
               <span className="step-num">4</span>
               <div>
                 <strong>Win the game</strong>
-                <p>Destroy all of your opponent's targets before they destroy yours. Use deduction, quantum probabilities, and the radar wisely.</p>
+                <p>Destroy all of your opponent's targets before they destroy yours.</p>
               </div>
-            </div>
-          </div>
-
-          <div className="help-concepts">
-            <h3>Quantum concepts in the game</h3>
-            <div className="concept-chips">
-              <span className="chip">Superposition</span>
-              <span className="chip">Entanglement</span>
-              <span className="chip">Measurement collapse</span>
-              <span className="chip">Hadamard gate</span>
-              <span className="chip">CNOT gate</span>
-              <span className="chip">State reconstruction</span>
             </div>
           </div>
         </div>

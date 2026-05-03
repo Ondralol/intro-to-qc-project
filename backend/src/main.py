@@ -12,6 +12,11 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 # Single shared GameManager instance which holds all active games and player sessions
 manager = GameManager()
 
+# Ping every 5 minutes to prevent cold start
+@app.route('/health')
+def health():
+    return 'ok'
+
 
 # Fired automatically by Socket.IO when a client closes the tab or loses connection
 # request.sid is the disconnecting player's socket ID, the unique identifier
@@ -101,7 +106,6 @@ def handle_play_turn(data):
 
     except ValueError as e:
         emit("error", {"message": str(e)})
-
 
 
 def main():

@@ -3,26 +3,28 @@ import { socket } from './socket'
 import Menu from './components/Menu'
 import Waiting from './components/Waiting'
 import Placement from './components/Placement'
-import GameReady from './components/GameReady'
+import Game from './components/Game'
 import './App.css'
 import Board from './components/Board'
 
-type Screen = 'menu' | 'waiting' | 'placement' | 'battle_ready' | "debug"
+type Screen = 'menu' | 'waiting' | 'placement' | 'battle_ready' | 'game' | 'debug'
 
 function App() {
   const [screen, setScreen] = useState<Screen>('menu')
   const [myId, setMyId] = useState('')
   const [firstTurn, setFirstTurn] = useState('')
   const [error, setError] = useState('')
+  const [myTargetColors, setMyTargetColors] = useState<Record<string, string>>({})
 
   useEffect(() => {
+    if (socket.connected) setMyId(socket.id ?? '')
     socket.on('connect', () => setMyId(socket.id ?? ''))
 
     socket.on('waiting_for_opponent', () => setScreen('waiting'))
     socket.on('placement_start', () => setScreen('placement'))
     socket.on('game_start', (data: { current_turn: string }) => {
       setFirstTurn(data.current_turn)
-      setScreen('battle_ready')
+      setScreen('game')
     })
     socket.on('opponent_disconnected', () => setScreen('menu'))
     socket.on('error', (data: { message: string }) => setError(data.message))
@@ -46,8 +48,9 @@ function App() {
       )}
       {screen === 'menu' && <Menu onPlay={() => socket.emit('find_match')} />}
       {screen === 'waiting' && <Waiting />}
-      {screen === 'placement' && <Placement />}
-      {screen === 'battle_ready' && <GameReady firstTurn={firstTurn} myId={myId} />}
+      {screen === 'placement' && <Placement onConfirm={colors => setMyTargetColors(colors)} />}
+
+      {screen === 'game' && <Game myId={myId} firstTurn={firstTurn} myTargetColors={myTargetColors} />}
       {screen === 'debug' && (                                                                                                                       
     <Board                                                                                                                                       
       cellColors={{ 'A1': '#3a7af8ff', 'A2': '#0055ffff', 'A7': '#34ff0bff' }}

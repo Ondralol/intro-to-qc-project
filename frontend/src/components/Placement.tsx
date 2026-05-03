@@ -14,8 +14,11 @@ const SHAPE_HINT: Record<Size, string> = {
   '2x2': 'Must be a 2×2 square',
 }
 
+// Pair 1: 1x1 + 1x2  |  Pair 2: 1x3 + 2x2
+const PAIRS: [Size, Size][] = [['1x1', '1x2'], ['1x3', '2x2']]
+
 type Coord = [number, number]
-type TargetPlacement = { anchor_a: Coord[]; anchor_b: Coord[]; anchorAPercent: number }
+type TargetPlacement = { anchor_a: Coord[]; anchor_b: Coord[] }
 type Placements = Record<Size, TargetPlacement>
 
 const TARGET_COLOURS: Record<Size, { a: string; b: string }> = {
@@ -26,7 +29,14 @@ const TARGET_COLOURS: Record<Size, { a: string; b: string }> = {
 }
 
 const initPlacements = (): Placements =>
-  Object.fromEntries(SIZES.map(s => [s, { anchor_a: [], anchor_b: [], anchorAPercent: 50 }])) as unknown as Placements
+  Object.fromEntries(SIZES.map(s => [s, { anchor_a: [], anchor_b: [] }])) as unknown as Placements
+
+const DEBUG_PLACEMENTS: Placements = {
+  '1x1': { anchor_a: [[0, 0]],                          anchor_b: [[0, 2]] },
+  '1x2': { anchor_a: [[1, 0], [1, 1]],                  anchor_b: [[1, 3], [1, 4]] },
+  '1x3': { anchor_a: [[2, 0], [2, 1], [2, 2]],          anchor_b: [[2, 4], [2, 5], [2, 6]] },
+  '2x2': { anchor_a: [[4, 0], [4, 1], [5, 0], [5, 1]], anchor_b: [[4, 3], [4, 4], [5, 3], [5, 4]] },
+}
 
 function isValidPartial(coords: Coord[], size: Size): boolean {
   if (coords.length <= 1) return true
@@ -66,13 +76,21 @@ function isValidPartial(coords: Coord[], size: Size): boolean {
   }
 }
 
-export default function Placement() {
+const pctToTheta = (pct: number) => 2 * Math.acos(Math.sqrt(pct / 100))
+
+interface Props {
+  onConfirm: (cellColors: Record<string, string>) => void
+}
+
+export default function Placement({ onConfirm }: Props) {
   const [placements, setPlacements] = useState<Placements>(initPlacements)
   const [activeSize, setActiveSize] = useState<Size>('1x1')
   const [activeAnchor, setActiveAnchor] = useState<'A' | 'B'>('A')
   const [submitted, setSubmitted] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [pair1Pct, setPair1Pct] = useState(50)
+  const [pair2Pct, setPair2Pct] = useState(50)
   const warningTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const showWarning = (msg: string) => {
@@ -144,12 +162,23 @@ export default function Placement() {
       return
     }
     setSubmitError(null)
+
+    const pairTheta: Record<Size, number> = {
+      '1x1': pctToTheta(pair1Pct), '1x2': pctToTheta(pair1Pct),
+      '1x3': pctToTheta(pair2Pct), '2x2': pctToTheta(pair2Pct),
+    }
     const targets = SIZES.map(s => ({
       size: s,
       anchor_a: placements[s].anchor_a,
       anchor_b: placements[s].anchor_b,
-      theta: 2 * Math.acos(Math.sqrt(placements[s].anchorAPercent / 100)),
+      theta: pairTheta[s],
     }))
+    const colors: Record<string, string> = {}
+    for (const s of SIZES) {
+      for (const [r, c] of placements[s].anchor_a) colors[cellKey(r, c)] = TARGET_COLOURS[s].a
+      for (const [r, c] of placements[s].anchor_b) colors[cellKey(r, c)] = TARGET_COLOURS[s].b
+    }
+    onConfirm(colors)
     socket.emit('place_targets', { targets })
     setSubmitted(true)
   }
@@ -159,8 +188,6 @@ export default function Placement() {
     for (const [r, c] of placements[s].anchor_a) cellColors[cellKey(r, c)] = TARGET_COLOURS[s].a
     for (const [r, c] of placements[s].anchor_b) cellColors[cellKey(r, c)] = TARGET_COLOURS[s].b
   }
-
-  const pct = placements[activeSize].anchorAPercent
 
   return (
     <div className="screen" style={{ gap: 16 }}>
@@ -191,30 +218,37 @@ export default function Placement() {
         <div style={{ color: '#f90', fontSize: 15 }}>{warning}</div>
       )}
 
-      <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 15, maxWidth: 400 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span>Anchor A: <strong>{pct}%</strong></span>
-          <span style={{ color: '#888' }}>Anchor B: {100 - pct}%</span>
-        </div>
-        <input
-          type="range" min={0} max={100} step={1}
-          value={pct}
-          disabled={submitted}
-          onChange={e => setPlacements(prev => ({
-            ...prev,
-            [activeSize]: { ...prev[activeSize], anchorAPercent: parseInt(e.target.value) },
-          }))}
-        />
-        <span style={{ fontSize: 14, color: '#888' }}>
-          Probability that this target collapses to Anchor A when first measured. 50% means equal chance of either position.
-        </span>
-      </label>
-
       <Board
         cellColors={cellColors}
         onCellClick={handleCellClick}
         disabled={submitted}
       />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 400 }}>
+        <span style={{ fontSize: 14, color: '#888' }}>
+          Set the probability that each entangled pair collapses to Anchor A when first measured.
+        </span>
+
+        {PAIRS.map(([a, b], i) => {
+          const pct = i === 0 ? pair1Pct : pair2Pct
+          const setPct = i === 0 ? setPair1Pct : setPair2Pct
+          return (
+            <label key={i} style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 15 }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <span style={{ minWidth: 60 }}>A: <strong>{pct}%</strong></span>
+                <span style={{ flex: 1, textAlign: 'center', color: '#aaa' }}>{a} and {b}</span>
+                <span style={{ minWidth: 60, textAlign: 'right', color: '#888' }}>B: {100 - pct}%</span>
+              </div>
+              <input
+                type="range" min={0} max={100} step={1}
+                value={pct}
+                disabled={submitted}
+                onChange={e => setPct(parseInt(e.target.value))}
+              />
+            </label>
+          )
+        })}
+      </div>
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <button onClick={handleSubmit} disabled={submitted}>
@@ -222,6 +256,9 @@ export default function Placement() {
         </button>
         <button onClick={() => { setPlacements(initPlacements()); setActiveAnchor('A'); setWarning(null); setSubmitError(null) }} disabled={submitted}>
           Reset
+        </button>
+        <button onClick={() => { setPlacements(DEBUG_PLACEMENTS); setWarning(null); setSubmitError(null) }} disabled={submitted}>
+          Fill All (debug)
         </button>
       </div>
 

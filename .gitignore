@@ -21,9 +21,6 @@ ENV/
 .coverage
 htmlcov/
 
-# Python version managers
-.python-version
-
 # Environment variables
 .env
 .env.local

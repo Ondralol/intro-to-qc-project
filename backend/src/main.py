@@ -48,7 +48,7 @@ def handle_find_match():
         # The second player join, the game can starts
         else:
             emit("placement_start", to=game.game_id)
-    except ValueError as e:
+    except Exception as e:
         emit("error", {"message": str(e)})
 
 
@@ -64,7 +64,7 @@ def handle_place_targets(data):
         # Once both players have placed, start the game
         if game.phase == GamePhase.FIRING:
             emit("game_start", {"current_turn": game.current_turn}, to=game.game_id)
-    except ValueError as e:
+    except Exception as e:
         emit("error", {"message": str(e)})
 
 
@@ -104,7 +104,7 @@ def handle_play_turn(data):
         else:
             emit("error", {"message": f"Unknown turn type: {turn_type}"})
 
-    except ValueError as e:
+    except Exception as e:
         emit("error", {"message": str(e)})
 
 

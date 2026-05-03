@@ -101,26 +101,27 @@ export default function Board({
                 {isDestroyed && (
                   <div style={{
                     position: 'absolute', inset: 0,
-                    background: 'rgba(180, 40, 40, 0.55)',
+                    background: 'rgba(160, 30, 30, 0.5)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 16, color: '#fff', fontWeight: 'bold',
+                    fontSize: 22, color: '#ff6666', fontWeight: 'bold',
                   }}>×</div>
                 )}
 
                 {!isDestroyed && isHit && (
                   <div style={{
                     position: 'absolute', inset: 0,
-                    background: 'rgba(255, 120, 0, 0.45)',
-                  }} />
+                    background: 'rgba(0, 0, 0, 0.35)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 22, color: '#fff', fontWeight: 'bold',
+                  }}>×</div>
                 )}
 
                 {isMiss && (
                   <div style={{
                     position: 'absolute', inset: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#555' }} />
-                  </div>
+                    fontSize: 22, color: '#555', fontWeight: 'bold',
+                  }}>×</div>
                 )}
 
                 {isInRadar && (

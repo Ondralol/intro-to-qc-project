@@ -1,27 +1,9 @@
 import random
-from dataclasses import dataclass
-from enum import Enum
-from typing import Optional
 
+from game.game_helper import GamePhase
+from game.game_helper import Target
 
-class GamePhase(Enum):
-    WAITING = "waiting"
-    PLACEMENT = "placement"
-    FIRING = "firing"
-    FINISHED = "finished"
-    DISCONNECTED = "disconnected"
-
-
-@dataclass
-class Target:
-    size: str  # "1x1", "1x2", "1x3", "2x2"
-    anchor_a: list[tuple[int, int]] # array of coordinates
-    anchor_b: list[tuple[int, int]] # array of coordinates
-    theta: float  # Ry angle in radians, set by player during placement
-    qubit_index: int  # 0-3
-    collapsed: bool = False
-    value: Optional[str] = None  # "0" = anchor A, "1" = anchor B
-
+import quokka.quokka
 
 class Game:
     ENTANGLED_PAIRS = [(0, 1), (2, 3)]
@@ -125,9 +107,102 @@ class Game:
         # TODO
         pass
 
-    def fire(self, player_id, coord):
-        # TODO Handle all cases based on design doc
-        pass
+    def fire(self, player_id, coord: tuple[int, int]):
+        enemy_id = self.player_a_id if self.player_a_id != player_id else self.player_b_id
+        enemy_targets = self.targets[enemy_id]
+
+        found_target = None
+        found_anchor = None
+        # Find the target
+        for target in enemy_targets:
+            # Try every cell in anchor A
+            for cell in target.anchor_a:
+                if coord == cell:
+                    found_target = target
+                    found_anchor = "A"
+                    break
+
+            # Try every cell in anchor B
+            for cell in target.anchor_b:
+                if coord == cell:
+                    found_target = target
+                    found_anchor = "B"
+                    break
+            
+            if found_target:
+                break
+        
+        # If we hit, we continue to play, otherwise the enemy plays
+        miss_turn = enemy_id
+        hit_turn = player_id
+
+        # Case A - complete miss
+        if not found_target:
+            return {"result": "miss", "cell": list(coord), "destroyed_cells": [], "pings": [], "next_turn": miss_turn, "game_over": False, "winner": None}
+
+        # Case B - first interaction, qubit has not collapsed
+        if not found_target.collapsed:
+            pair = next(p for p in self.ENTANGLED_PAIRS if found_target.qubit_index in p)
+            partner_qubit = pair[0] if found_target.qubit_index == pair[1] else pair[1]
+            partner_target = next(t for t in enemy_targets if t.qubit_index == partner_qubit)
+
+            # pair[0] is the control qubit (Ry applied to it)
+            if found_target.qubit_index == pair[0]:
+                t1, t2 = found_target, partner_target
+            else:
+                t1, t2 = partner_target, found_target
+
+            outcome = quokka.quokka.fire_shot(t1, t2)  # "00" or "11"
+            t1.value = outcome[0]
+            t2.value = outcome[1]
+            t1.collapsed = True
+            t2.collapsed = True
+
+            # Losing anchor cells of both targets become pings (revealed as ghost positions)
+            # Basically we show the positions where the target is NOT
+            pings = []
+            for t in [t1, t2]:
+                losing_anchor = t.anchor_b if t.value == "0" else t.anchor_a
+                for cell in losing_anchor:
+                    pings.append(list(cell))
+
+            real_anchor = found_target.anchor_a if found_target.value == "0" else found_target.anchor_b
+            # If we hit the correct anchor
+            if coord in real_anchor:
+                found_target.hit_cells.add(coord)
+                # If we completely destroyed the target
+                if found_target.hit_cells >= set(real_anchor):
+                    destroyed_cells = [list(c) for c in real_anchor]
+                    game_over, winner = self._check_game_over(enemy_id)
+                    return {"result": "destroyed", "cell": list(coord), "destroyed_cells": destroyed_cells, "pings": pings, "next_turn": hit_turn, "game_over": game_over, "winner": winner}
+                return {"result": "hit", "cell": list(coord), "destroyed_cells": [], "pings": pings, "next_turn": hit_turn, "game_over": False, "winner": None}
+            return {"result": "miss", "cell": list(coord), "destroyed_cells": [], "pings": pings, "next_turn": miss_turn, "game_over": False, "winner": None}
+
+        # Case C - subsequent hits on an already collapsed target
+        real_anchor = found_target.anchor_a if found_target.value == "0" else found_target.anchor_b
+        # If we hit the correct anchor
+        if coord in real_anchor:
+            found_target.hit_cells.add(coord)
+            # If we completely destroyed the target
+            if found_target.hit_cells >= set(real_anchor):
+                destroyed_cells = [list(c) for c in real_anchor]
+                game_over, winner = self._check_game_over(enemy_id)
+                return {"result": "destroyed", "cell": list(coord), "destroyed_cells": destroyed_cells, "pings": [], "next_turn": hit_turn, "game_over": game_over, "winner": winner}
+            return {"result": "hit", "cell": list(coord), "destroyed_cells": [], "pings": [], "next_turn": hit_turn, "game_over": False, "winner": None}
+        return {"result": "miss", "cell": list(coord), "destroyed_cells": [], "pings": [], "next_turn": miss_turn, "game_over": False, "winner": None}
+
+    def _check_game_over(self, loser_id: str):
+        # Check all targets
+        for target in self.targets[loser_id]:
+            if not target.collapsed:
+                return False, None
+            real_anchor = target.anchor_a if target.value == "0" else target.anchor_b
+            if target.hit_cells < set(real_anchor):
+                return False, None
+        winner_id = self.player_b_id if loser_id == self.player_a_id else self.player_a_id
+        self.phase = GamePhase.FINISHED
+        self.winner = winner_id
+        return True, winner_id
 
     def disconnected(self):
         self.phase = GamePhase.DISCONNECTED

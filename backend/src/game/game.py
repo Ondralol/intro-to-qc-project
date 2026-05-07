@@ -19,6 +19,10 @@ class Game:
         self.winner = None
         self.targets: dict[str, list[Target]] = {}  # player_id -> their 4 targets
         self.ready = set() # players who have placed their targets
+        # Radar puzzle state per player
+        self.puzzles_solved: dict[str, int] = {}  # player_id -> count of solved radar puzzles
+        self.active_puzzle: dict[str, dict] = {}  # player_id -> last issued puzzle dict
+        self.radar_unlocked: dict[str, bool] = {}  # player_id -> can run one radar scan now
 
     def add_player(self, player_id: str):
         self.player_b_id = player_id
@@ -103,9 +107,50 @@ class Game:
             self.current_turn = random.choice([self.player_a_id, self.player_b_id])
 
 
-    def play_puzzle(self):
-        # TODO
-        pass
+    def issue_puzzle(self, player_id: str) -> dict:
+        """Roll a new radar puzzle for the player, scaled to how many they've solved."""
+        from game import puzzles
+
+        if self.phase != GamePhase.FIRING:
+            raise ValueError("Puzzles only available during firing phase")
+        if player_id not in (self.player_a_id, self.player_b_id):
+            raise ValueError("Unknown player")
+
+        solved = self.puzzles_solved.get(player_id, 0)
+        tier = puzzles.tier_for_use(solved)
+        puzzle = puzzles.roll_puzzle(tier)
+        self.active_puzzle[player_id] = puzzle
+        return puzzle
+
+    def submit_puzzle(self, player_id: str, puzzle_id: str, gates: list[dict]) -> dict:
+        """Evaluate the player's submission against the puzzle they were issued."""
+        from game import puzzles
+
+        puzzle = self.active_puzzle.get(player_id)
+        if not puzzle or puzzle["puzzle_id"] != puzzle_id:
+            raise ValueError("No active puzzle for this player")
+
+        result = puzzles.evaluate(puzzle, gates, shots=puzzle["shots"])
+        if result["passed"]:
+            self.puzzles_solved[player_id] = self.puzzles_solved.get(player_id, 0) + 1
+            self.radar_unlocked[player_id] = True
+        # A failed submission consumes the puzzle — player must request a new one.
+        self.active_puzzle.pop(player_id, None)
+        return result
+
+    def run_radar(self, player_id: str, area_cells: list[tuple[int, int]]) -> dict:
+        """Player consumes their unlocked radar to scan a 3x3 area on the enemy's board."""
+        from game import radar
+
+        if not self.radar_unlocked.get(player_id):
+            raise ValueError("Radar is not unlocked — solve a puzzle first")
+        enemy_id = self.player_a_id if player_id != self.player_a_id else self.player_b_id
+        enemy_targets = self.targets[enemy_id]
+
+        result = radar.run_radar_scan(enemy_targets, area_cells)
+        # One radar use consumes the unlock.
+        self.radar_unlocked[player_id] = False
+        return result
 
     def fire(self, player_id, coord: tuple[int, int]):
         enemy_id = self.player_a_id if self.player_a_id != player_id else self.player_b_id

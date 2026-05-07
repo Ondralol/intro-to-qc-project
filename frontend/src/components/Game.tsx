@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { socket } from '../socket'
 import Board, { cellKey } from './Board'
+import PuzzleModal, { type Puzzle } from './PuzzleModal'
 
 interface Props {
   myId: string
@@ -30,6 +31,16 @@ export default function Game({ myId, firstTurn, myTargetColors }: Props) {
   const [enemyDestroyed, setEnemyDestroyed] = useState<Set<string>>(new Set())
   const [enemyMisses, setEnemyMisses] = useState<Set<string>>(new Set())
   const [enemyPings, setEnemyPings] = useState<Set<string>>(new Set())
+
+  const [puzzle, setPuzzle] = useState<Puzzle | null>(null)
+  const [requestingPuzzle, setRequestingPuzzle] = useState(false)
+
+  // Radar scan: after passing the puzzle, the player picks a 3x3 area on the enemy board.
+  const [radarMode, setRadarMode] = useState(false)
+  const [radarAnchor, setRadarAnchor] = useState<[number, number] | null>(null)
+  const [scanning, setScanning] = useState(false)
+  const [enemyProbabilities, setEnemyProbabilities] = useState<Record<string, number>>({})
+  const [enemyRevealed, setEnemyRevealed] = useState<Set<string>>(new Set())
 
   const isMyTurn = currentTurn === myId
 
@@ -73,15 +84,70 @@ export default function Game({ myId, firstTurn, myTargetColors }: Props) {
       setGameOver(data.winner === myId ? 'win' : 'loss')
     })
 
+    socket.on('puzzle_issued', (data: Puzzle) => {
+      setPuzzle(data)
+      setRequestingPuzzle(false)
+    })
+
+    // When the puzzle passes, close the modal and let the player pick a scan area.
+    socket.on('puzzle_result', (data: { passed: boolean }) => {
+      if (data.passed) {
+        setPuzzle(null)
+        setRadarMode(true)
+        setRadarAnchor(null)
+        setSelectedCell(null)
+      }
+    })
+
+    socket.on('radar_result', (data: {
+      probability_map: Record<string, number>
+      scan_cells: [number, number][]
+    }) => {
+      const probs: Record<string, number> = {}
+      for (const [k, v] of Object.entries(data.probability_map)) {
+        const [r, c] = k.split(',').map(Number)
+        probs[cellKey(r, c)] = v
+      }
+      setEnemyProbabilities(prev => ({ ...prev, ...probs }))
+      setEnemyRevealed(prev => {
+        const next = new Set(prev)
+        for (const [r, c] of data.scan_cells) next.add(cellKey(r, c))
+        return next
+      })
+      setRadarMode(false)
+      setRadarAnchor(null)
+      setScanning(false)
+    })
+
     return () => {
       socket.off('shot_result')
       socket.off('shot_received')
       socket.off('game_over')
+      socket.off('puzzle_issued')
+      socket.off('puzzle_result')
+      socket.off('radar_result')
     }
   }, [myId])
 
+  // 3x3 area cells given the chosen anchor (top-left). Clamped so the box stays in-bounds.
+  const radarAreaCells = (() => {
+    if (!radarAnchor) return [] as [number, number][]
+    const [r0, c0] = radarAnchor
+    const r = Math.min(r0, 7 - 3)
+    const c = Math.min(c0, 7 - 3)
+    const cells: [number, number][] = []
+    for (let dr = 0; dr < 3; dr++) for (let dc = 0; dc < 3; dc++) cells.push([r + dr, c + dc])
+    return cells
+  })()
+  const radarAreaSet = new Set(radarAreaCells.map(([r, c]) => cellKey(r, c)))
+
   const handleEnemyCellClick = (row: number, col: number) => {
-    if (!isMyTurn || gameOver) return
+    if (gameOver) return
+    if (radarMode) {
+      setRadarAnchor([row, col])
+      return
+    }
+    if (!isMyTurn) return
     const key = cellKey(row, col)
     if (enemyHits.has(key) || enemyMisses.has(key) || enemyDestroyed.has(key)) return
     setSelectedCell(prev => prev === key ? null : key)
@@ -92,6 +158,23 @@ export default function Game({ myId, firstTurn, myTargetColors }: Props) {
     const row = selectedCell.charCodeAt(0) - 65
     const col = parseInt(selectedCell.slice(1)) - 1
     socket.emit('play_turn', { turn_type: 'fire', cell: [row, col] })
+  }
+
+  const handleRadar = () => {
+    if (!isMyTurn || gameOver || puzzle || requestingPuzzle || radarMode) return
+    setRequestingPuzzle(true)
+    socket.emit('request_puzzle')
+  }
+
+  const handleScan = () => {
+    if (!radarMode || !radarAnchor || scanning) return
+    setScanning(true)
+    socket.emit('radar_scan', { cells: radarAreaCells })
+  }
+
+  const handleCancelScan = () => {
+    setRadarMode(false)
+    setRadarAnchor(null)
   }
 
   return (
@@ -125,19 +208,53 @@ export default function Game({ myId, firstTurn, myTargetColors }: Props) {
             destroyedCells={enemyDestroyed}
             missCells={enemyMisses}
             pingCells={enemyPings}
-            selectedCell={selectedCell}
+            selectedCell={radarMode ? null : selectedCell}
+            radarArea={radarMode ? radarAreaSet : (enemyRevealed.size > 0 ? enemyRevealed : undefined)}
+            probabilityMap={enemyProbabilities}
             onCellClick={handleEnemyCellClick}
-            disabled={!isMyTurn || !!gameOver}
+            disabled={(!isMyTurn && !radarMode) || !!gameOver}
           />
-          <button
-            onClick={handleFire}
-            disabled={!selectedCell || !isMyTurn || !!gameOver}
-            style={{ marginTop: 4, padding: '12px 36px', fontSize: 16 }}
-          >
-            {selectedCell ? `Fire at ${selectedCell}` : 'Select a cell to fire'}
-          </button>
+          {radarMode ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginTop: 4 }}>
+              <span style={{ fontSize: 13, color: '#4af' }}>
+                {radarAnchor ? '3×3 area selected — click Scan to measure' : 'Click any cell to anchor the 3×3 scan area'}
+              </span>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button onClick={handleCancelScan} disabled={scanning} style={{ padding: '12px 24px', fontSize: 16 }}>
+                  Cancel
+                </button>
+                <button
+                  onClick={handleScan}
+                  disabled={!radarAnchor || scanning}
+                  className="active"
+                  style={{ padding: '12px 36px', fontSize: 16 }}
+                >
+                  {scanning ? 'Scanning…' : 'Scan'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+              <button
+                onClick={handleFire}
+                disabled={!selectedCell || !isMyTurn || !!gameOver}
+                style={{ padding: '12px 36px', fontSize: 16 }}
+              >
+                {selectedCell ? `Fire at ${selectedCell}` : 'Select a cell to fire'}
+              </button>
+              <button
+                onClick={handleRadar}
+                disabled={!isMyTurn || !!gameOver || !!puzzle || requestingPuzzle}
+                style={{ padding: '12px 24px', fontSize: 16 }}
+              >
+                {requestingPuzzle ? 'Loading…' : 'Radar'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {puzzle && <PuzzleModal puzzle={puzzle} onClose={() => setPuzzle(null)} />}
 
       {gameOver && (
         <div style={{

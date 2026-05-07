@@ -111,6 +111,60 @@ def handle_play_turn(data):
         emit("error", {"message": str(e)})
 
 
+# Player asks for a new radar puzzle. Tier scales with how many puzzles they've solved.
+@socketio.on("request_puzzle")
+def handle_request_puzzle():
+    try:
+        game = manager.get_game_for_player(request.sid)
+        puzzle = game.issue_puzzle(request.sid)
+        # Don't leak target_distribution / threshold? The frontend already needs the
+        # description; distribution + threshold are useful for the live preview but
+        # not strictly required. We send the public fields the UI needs.
+        emit("puzzle_issued", {
+            "puzzle_id": puzzle["puzzle_id"],
+            "tier": puzzle["tier"],
+            "n_qubits": puzzle["n_qubits"],
+            "initial_state": puzzle["initial_state"],
+            "target_description": puzzle["target_description"],
+            "gate_palette": puzzle["gate_palette"],
+            "ry_thetas": puzzle.get("ry_thetas", []),
+            "max_gates": puzzle["max_gates"],
+        })
+    except Exception as e:
+        emit("error", {"message": str(e)})
+
+
+# Player submits a gate sequence for the active puzzle.
+@socketio.on("submit_puzzle")
+def handle_submit_puzzle(data):
+    try:
+        game = manager.get_game_for_player(request.sid)
+        result = game.submit_puzzle(request.sid, data["puzzle_id"], data.get("gates", []))
+        emit("puzzle_result", {
+            "passed": result["passed"],
+            "score": result["score"],
+            "counts": result["counts"],
+        })
+    except Exception as e:
+        emit("error", {"message": str(e)})
+
+
+# Player commits a 3x3 scan area after passing the puzzle.
+@socketio.on("radar_scan")
+def handle_radar_scan(data):
+    try:
+        game = manager.get_game_for_player(request.sid)
+        cells = [tuple(c) for c in data.get("cells", [])]
+        result = game.run_radar(request.sid, cells)
+        emit("radar_result", {
+            "probability_map": result["probability_map"],
+            "qubit_results": result["qubit_results"],
+            "scan_cells": [list(c) for c in cells],
+        })
+    except Exception as e:
+        emit("error", {"message": str(e)})
+
+
 def main():
     socketio.run(app, host="0.0.0.0", port=5000, debug=True)
 

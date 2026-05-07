@@ -1,9 +1,8 @@
 import random
 
-from game.game_helper import GamePhase
-from game.game_helper import Target
-
+from game.game_helper import GamePhase, Target
 import quokka.quokka
+
 
 class Game:
     ENTANGLED_PAIRS = [(0, 1), (2, 3)]
@@ -17,33 +16,17 @@ class Game:
         self.phase = GamePhase.WAITING
         self.current_turn = None
         self.winner = None
-        self.targets: dict[str, list[Target]] = {}  # player_id -> their 4 targets
-        self.ready = set() # players who have placed their targets
+        self.targets: dict[str, list[Target]] = {}
+        self.ready = set()
+        # Radar / puzzle state per player
+        self.radar_unlocked: dict[str, bool] = {}
+        self.active_puzzle: dict[str, dict] = {}  # player_id -> puzzle dict
 
     def add_player(self, player_id: str):
         self.player_b_id = player_id
         self.phase = GamePhase.PLACEMENT
 
     def place_targets(self, player_id: str, raw_targets: list[dict]):
-        """ Adds target for player_id.
-
-        The structure of raw_targets (this is send from the frontend)
-        raw_targets: list of 4 target objects, one per size.
-
-        [
-          {
-            "size":     "1x2" | "2x2" | "2x3" | "1x4",
-            "anchor_a": [[row, col], ...],
-            "anchor_b": [[row, col], ...],
-            "theta":    float   // Ry angle in radians
-          },
-          ...
-        ]
-
-        Rows and cols are 0-indexed (0–6). Anchor A and B must not share any tiles.
-        No two targets may share any tile across either anchor.
-        """
-
         if self.phase != GamePhase.PLACEMENT:
             raise ValueError("Not in placement phase")
         if player_id in self.ready:
@@ -51,37 +34,29 @@ class Game:
         if len(raw_targets) != 4:
             raise ValueError("Must place exactly 4 targets")
 
-        # Check if the targets match the defined structure    
         sizes = [t["size"] for t in raw_targets]
         if sorted(sizes) != sorted(self.QUBIT_BY_SIZE.keys()):
             raise ValueError("Must place one of each target size")
 
         targets = []
-
-        # This will contain all positions that have a target placed onto them
         all_tiles: set[tuple[int, int]] = set()
 
-        # Iterate over each target and add it to the game
         for raw in raw_targets:
             anchor_a = [tuple(c) for c in raw["anchor_a"]]
             anchor_b = [tuple(c) for c in raw["anchor_b"]]
 
-            # Check if no tile is out of bounds
             for tile in anchor_a + anchor_b:
                 if not (0 <= tile[0] < self.GRID_SIZE and 0 <= tile[1] < self.GRID_SIZE):
                     raise ValueError(f"Tile {tile} is out of bounds")
 
-            # Check if the tiles do not share any tile
             if set(anchor_a) & set(anchor_b):
                 raise ValueError(f"Anchor A and B overlap for {raw['size']}")
-            
-            # Check if the tiles do not overal with another target
+
             for tile in anchor_a + anchor_b:
                 if tile in all_tiles:
                     raise ValueError(f"Tile {tile} overlaps with another target")
                 all_tiles.add(tile)
-            
-            # Append the targets
+
             targets.append(Target(
                 size=raw["size"],
                 anchor_a=anchor_a,
@@ -90,63 +65,54 @@ class Game:
                 qubit_index=self.QUBIT_BY_SIZE[raw["size"]],
             ))
 
-        # Add targets to player and make the player ready
         self.targets[player_id] = targets
         self.ready.add(player_id)
 
-
-        # If both players are ready, set, set the game state to FIRING 
-        # TODO Potential race condition
         if len(self.ready) == 2:
             self.phase = GamePhase.FIRING
-            # Select who plays first
             self.current_turn = random.choice([self.player_a_id, self.player_b_id])
 
-
-    def play_puzzle(self):
-        # TODO
-        pass
+    # ------------------------------------------------------------------
+    # Fire
+    # ------------------------------------------------------------------
 
     def fire(self, player_id, coord: tuple[int, int]):
-        enemy_id = self.player_a_id if self.player_a_id != player_id else self.player_b_id
+        enemy_id = self.player_b_id if player_id == self.player_a_id else self.player_a_id
         enemy_targets = self.targets[enemy_id]
 
         found_target = None
         found_anchor = None
-        # Find the target
         for target in enemy_targets:
-            # Try every cell in anchor A
             for cell in target.anchor_a:
                 if coord == cell:
                     found_target = target
                     found_anchor = "A"
                     break
-
-            # Try every cell in anchor B
             for cell in target.anchor_b:
                 if coord == cell:
                     found_target = target
                     found_anchor = "B"
                     break
-            
             if found_target:
                 break
-        
-        # If we hit, we continue to play, otherwise the enemy plays
+
         miss_turn = enemy_id
         hit_turn = player_id
 
-        # Case A - complete miss
+        # Case A — miss
         if not found_target:
-            return {"result": "miss", "cell": list(coord), "destroyed_cells": [], "pings": [], "next_turn": miss_turn, "game_over": False, "winner": None}
+            return {
+                "result": "miss", "cell": list(coord),
+                "destroyed_cells": [], "pings": [],
+                "next_turn": miss_turn, "game_over": False, "winner": None,
+            }
 
-        # Case B - first interaction, qubit has not collapsed
+        # Case B — first interaction, qubit not yet collapsed
         if not found_target.collapsed:
             pair = next(p for p in self.ENTANGLED_PAIRS if found_target.qubit_index in p)
             partner_qubit = pair[0] if found_target.qubit_index == pair[1] else pair[1]
             partner_target = next(t for t in enemy_targets if t.qubit_index == partner_qubit)
 
-            # pair[0] is the control qubit (Ry applied to it)
             if found_target.qubit_index == pair[0]:
                 t1, t2 = found_target, partner_target
             else:
@@ -158,8 +124,7 @@ class Game:
             t1.collapsed = True
             t2.collapsed = True
 
-            # Losing anchor cells of both targets become pings (revealed as ghost positions)
-            # Basically we show the positions where the target is NOT
+            # Pings = losing-anchor cells for both entangled targets
             pings = []
             for t in [t1, t2]:
                 losing_anchor = t.anchor_b if t.value == "0" else t.anchor_a
@@ -167,32 +132,142 @@ class Game:
                     pings.append(list(cell))
 
             real_anchor = found_target.anchor_a if found_target.value == "0" else found_target.anchor_b
-            # If we hit the correct anchor
             if coord in real_anchor:
                 found_target.hit_cells.add(coord)
-                # If we completely destroyed the target
                 if found_target.hit_cells >= set(real_anchor):
-                    destroyed_cells = [list(c) for c in real_anchor]
                     game_over, winner = self._check_game_over(enemy_id)
-                    return {"result": "destroyed", "cell": list(coord), "destroyed_cells": destroyed_cells, "pings": pings, "next_turn": hit_turn, "game_over": game_over, "winner": winner}
-                return {"result": "hit", "cell": list(coord), "destroyed_cells": [], "pings": pings, "next_turn": hit_turn, "game_over": False, "winner": None}
-            return {"result": "miss", "cell": list(coord), "destroyed_cells": [], "pings": pings, "next_turn": miss_turn, "game_over": False, "winner": None}
+                    return {
+                        "result": "destroyed", "cell": list(coord),
+                        "destroyed_cells": [list(c) for c in real_anchor],
+                        "pings": pings, "next_turn": hit_turn,
+                        "game_over": game_over, "winner": winner,
+                    }
+                return {
+                    "result": "hit", "cell": list(coord),
+                    "destroyed_cells": [], "pings": pings,
+                    "next_turn": hit_turn, "game_over": False, "winner": None,
+                }
+            return {
+                "result": "miss", "cell": list(coord),
+                "destroyed_cells": [], "pings": pings,
+                "next_turn": miss_turn, "game_over": False, "winner": None,
+            }
 
-        # Case C - subsequent hits on an already collapsed target
+        # Case C — subsequent hit on an already-collapsed target
         real_anchor = found_target.anchor_a if found_target.value == "0" else found_target.anchor_b
-        # If we hit the correct anchor
         if coord in real_anchor:
             found_target.hit_cells.add(coord)
-            # If we completely destroyed the target
             if found_target.hit_cells >= set(real_anchor):
-                destroyed_cells = [list(c) for c in real_anchor]
                 game_over, winner = self._check_game_over(enemy_id)
-                return {"result": "destroyed", "cell": list(coord), "destroyed_cells": destroyed_cells, "pings": [], "next_turn": hit_turn, "game_over": game_over, "winner": winner}
-            return {"result": "hit", "cell": list(coord), "destroyed_cells": [], "pings": [], "next_turn": hit_turn, "game_over": False, "winner": None}
-        return {"result": "miss", "cell": list(coord), "destroyed_cells": [], "pings": [], "next_turn": miss_turn, "game_over": False, "winner": None}
+                return {
+                    "result": "destroyed", "cell": list(coord),
+                    "destroyed_cells": [list(c) for c in real_anchor],
+                    "pings": [], "next_turn": hit_turn,
+                    "game_over": game_over, "winner": winner,
+                }
+            return {
+                "result": "hit", "cell": list(coord),
+                "destroyed_cells": [], "pings": [],
+                "next_turn": hit_turn, "game_over": False, "winner": None,
+            }
+        return {
+            "result": "miss", "cell": list(coord),
+            "destroyed_cells": [], "pings": [],
+            "next_turn": miss_turn, "game_over": False, "winner": None,
+        }
+
+    # ------------------------------------------------------------------
+    # Puzzle
+    # ------------------------------------------------------------------
+
+    def get_puzzle(self, player_id: str) -> dict:
+        """Return (and cache) a random puzzle for this player."""
+        if player_id not in self.active_puzzle:
+            self.active_puzzle[player_id] = quokka.quokka.get_random_puzzle()
+        return self.active_puzzle[player_id]
+
+    def play_puzzle(self, player_id: str, gate_sequence: list) -> dict:
+        """Evaluate the player's gate sequence.
+        Does NOT advance the turn — puzzle attempts are free.
+        If passed, the player's radar is unlocked.
+        """
+        puzzle = self.active_puzzle.get(player_id)
+        if not puzzle:
+            raise ValueError("No active puzzle — call get_puzzle first")
+
+        result = quokka.quokka.evaluate_puzzle(
+            gate_sequence=gate_sequence,
+            initial_state=puzzle["initial"],
+            target_outcome=puzzle["target"],
+        )
+
+        if result["passed"]:
+            self.radar_unlocked[player_id] = True
+            # Clear the puzzle so a fresh one is given next time
+            del self.active_puzzle[player_id]
+
+        return {
+            "passed": result["passed"],
+            "probability": result["probability"],
+            "radar_unlocked": self.radar_unlocked.get(player_id, False),
+        }
+
+    # ------------------------------------------------------------------
+    # Radar
+    # ------------------------------------------------------------------
+
+    def radar_scan(self, player_id: str, tiles: list) -> dict:
+        """Run a radar scan over the given tiles.
+        Consumes the radar charge and advances the turn.
+        """
+        if not self.radar_unlocked.get(player_id):
+            raise ValueError("Radar not unlocked — solve the puzzle first")
+
+        enemy_id = self.player_b_id if player_id == self.player_a_id else self.player_a_id
+        enemy_targets = self.targets[enemy_id]
+
+        tile_set = {tuple(t) for t in tiles}
+
+        # Find qubits whose anchors overlap with the scan area
+        scan_qubits: list[int] = []
+        for target in enemy_targets:
+            overlap = (set(target.anchor_a) | set(target.anchor_b)) & tile_set
+            if overlap and target.qubit_index not in scan_qubits:
+                scan_qubits.append(target.qubit_index)
+
+        cell_probs: dict[str, float] = {}
+
+        if scan_qubits:
+            radar_result = quokka.quokka.run_radar(enemy_targets, scan_qubits)
+            qubit_results = radar_result["qubit_results"]
+
+            # Map qubit measurement results back to individual cells
+            for target in enemy_targets:
+                if target.qubit_index not in qubit_results:
+                    continue
+                prob_one = qubit_results[target.qubit_index]["prob_one"]
+
+                for cell in target.anchor_a:
+                    if tuple(cell) in tile_set:
+                        key = f"{chr(65 + cell[0])}{cell[1] + 1}"
+                        cell_probs[key] = round(1.0 - prob_one, 3)
+
+                for cell in target.anchor_b:
+                    if tuple(cell) in tile_set:
+                        key = f"{chr(65 + cell[0])}{cell[1] + 1}"
+                        cell_probs[key] = round(prob_one, 3)
+
+        # Consume radar charge and advance turn
+        self.radar_unlocked[player_id] = False
+        self.current_turn = enemy_id
+
+        return {"cell_probs": cell_probs, "next_turn": self.current_turn}
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
 
     def _check_game_over(self, loser_id: str):
-        # Check all targets
         for target in self.targets[loser_id]:
             if not target.collapsed:
                 return False, None
@@ -206,5 +281,3 @@ class Game:
 
     def disconnected(self):
         self.phase = GamePhase.DISCONNECTED
-
-        

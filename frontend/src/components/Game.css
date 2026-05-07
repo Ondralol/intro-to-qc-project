@@ -1,0 +1,305 @@
+.game-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 32px 16px;
+  min-height: 100vh;
+}
+
+/* ── Turn indicator ── */
+.turn-banner {
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  padding: 8px 24px;
+  border-radius: 6px;
+  transition: color 0.2s, background 0.2s;
+}
+.turn-banner.my-turn {
+  color: #4af;
+  background: rgba(68, 170, 255, 0.08);
+  border: 1px solid rgba(68, 170, 255, 0.25);
+}
+.turn-banner.their-turn {
+  color: #888;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid #2a2e42;
+}
+
+/* ── Boards layout ── */
+.boards-row {
+  display: flex;
+  gap: 56px;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.board-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.board-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #bbb;
+  letter-spacing: 0.3px;
+}
+
+/* ── Action area (below enemy board) ── */
+.action-area {
+  margin-top: 4px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.fire-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.btn-fire {
+  padding: 10px 28px;
+  font-size: 1rem;
+  background: #3b7cff;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-fire:hover:not(:disabled) { background: #2d6ee0; }
+.btn-fire:disabled { opacity: 0.35; cursor: default; }
+
+.btn-puzzle {
+  padding: 10px 20px;
+  font-size: 0.92rem;
+  border: 1px solid #444;
+  border-radius: 6px;
+  background: transparent;
+  color: #ccc;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.btn-puzzle:hover:not(:disabled) { border-color: #aaa; color: #fff; }
+.btn-puzzle:disabled { opacity: 0.35; cursor: default; }
+
+.btn-radar {
+  padding: 10px 20px;
+  font-size: 0.92rem;
+  border: 1px solid #7c4dff;
+  border-radius: 6px;
+  background: rgba(124,77,255,0.1);
+  color: #b39dff;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-radar:hover:not(:disabled) { background: rgba(124,77,255,0.2); }
+.btn-radar:disabled { opacity: 0.35; cursor: default; }
+
+.radar-unlocked-badge {
+  font-size: 0.8rem;
+  color: #b39dff;
+  background: rgba(124,77,255,0.12);
+  border: 1px solid rgba(124,77,255,0.3);
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+
+.radar-hint {
+  font-size: 0.88rem;
+  color: #888;
+}
+
+.btn-secondary {
+  padding: 8px 18px;
+  font-size: 0.88rem;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: transparent;
+  color: #999;
+  cursor: pointer;
+}
+.btn-secondary:hover { border-color: #666; color: #ccc; }
+
+/* ── Puzzle overlay ── */
+.puzzle-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  padding: 16px;
+}
+
+.puzzle-card {
+  background: #13151f;
+  border: 1px solid #2a2e42;
+  border-radius: 12px;
+  padding: 36px 40px;
+  max-width: 480px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.puzzle-card h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #eee;
+  margin: 0;
+}
+
+.puzzle-description {
+  font-size: 0.92rem;
+  color: #999;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.puzzle-hint {
+  font-size: 0.82rem;
+  color: #666;
+  font-style: italic;
+  margin: 0;
+}
+
+.circuit-display {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  background: #0d0f1a;
+  border: 1px solid #2a2e42;
+  border-radius: 8px;
+  padding: 12px 16px;
+  min-height: 48px;
+  font-family: monospace;
+  font-size: 0.95rem;
+  color: #aaa;
+}
+
+.circuit-label {
+  color: #666;
+}
+
+.gate-chip {
+  background: #1e2235;
+  border: 1px solid #4af;
+  color: #4af;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+}
+.gate-chip:hover { background: #253050; }
+
+.gate-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-gate {
+  padding: 8px 18px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  font-family: monospace;
+  border: 1px solid #555;
+  border-radius: 6px;
+  background: #1e1e1e;
+  color: #ddd;
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  letter-spacing: 0.5px;
+}
+.btn-gate:hover { background: #2a2a2a; border-color: #888; }
+
+.puzzle-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.btn-submit {
+  padding: 10px 24px;
+  font-size: 0.95rem;
+  background: #3b7cff;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-submit:hover:not(:disabled) { background: #2d6ee0; }
+.btn-submit:disabled { opacity: 0.4; cursor: default; }
+
+.puzzle-result {
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 10px 16px;
+  border-radius: 6px;
+  text-align: center;
+}
+.puzzle-result.pass {
+  color: #4caf50;
+  background: rgba(76,175,80,0.1);
+  border: 1px solid rgba(76,175,80,0.3);
+}
+.puzzle-result.fail {
+  color: #f55;
+  background: rgba(255,80,80,0.1);
+  border: 1px solid rgba(255,80,80,0.3);
+}
+
+/* ── Game-over overlay ── */
+.gameover-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+}
+
+.gameover-card {
+  background: #13151f;
+  border: 1px solid #2a2e42;
+  border-radius: 12px;
+  padding: 56px 72px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gameover-title {
+  font-size: 3rem;
+  font-weight: 800;
+  margin: 0;
+  letter-spacing: -1px;
+}
+.gameover-title.win { color: #4af; }
+.gameover-title.loss { color: #f55; }
+
+.gameover-sub {
+  color: #666;
+  margin: 0;
+  font-size: 0.95rem;
+}

@@ -18,6 +18,7 @@ export interface BoardProps {
   radarArea?: Set<string>
   probabilityMap?: Record<string, number>
   onCellClick?: (row: number, col: number) => void
+  onCellHover?: (row: number, col: number) => void
   disabled?: boolean
   cellSize?: number
 }
@@ -32,6 +33,7 @@ export default function Board({
   radarArea = new Set(),
   probabilityMap = {},
   onCellClick,
+  onCellHover,
   disabled = false,
   cellSize = 54,
 }: BoardProps) {
@@ -86,6 +88,7 @@ export default function Board({
                 key={key}
                 className={`board-cell${disabled ? ' disabled' : ''}`}
                 onClick={() => !disabled && onCellClick?.(row, col)}
+                onMouseEnter={() => !disabled && onCellHover?.(row, col)}
                 style={{
                   width: cellSize,
                   height: cellSize,

@@ -16,9 +16,29 @@ interface ShotData {
   next_turn: string
 }
 
+type RadarSize = 2 | 3
+
+interface RadarProbability {
+  coord?: [number, number]
+  cell?: [number, number]
+  probability: number
+}
+
+interface RadarResult {
+  tiles?: RadarProbability[]
+  probabilities?: RadarProbability[] | Record<string, number>
+  coords?: RadarProbability[]
+  next_turn?: string
+}
+
 export default function Game({ myId, firstTurn, myTargetColors }: Props) {
   const [currentTurn, setCurrentTurn] = useState(firstTurn)
   const [selectedCell, setSelectedCell] = useState<string | null>(null)
+  const [radarMode, setRadarMode] = useState(false)
+  const [radarSize, setRadarSize] = useState<RadarSize>(3)
+  const [selectedRadarOrigin, setSelectedRadarOrigin] = useState<[number, number] | null>(null)
+  const [radarArea, setRadarArea] = useState<Set<string>>(new Set())
+  const [radarProbabilities, setRadarProbabilities] = useState<Record<string, number>>({})
   const [gameOver, setGameOver] = useState<'win' | 'loss' | null>(null)
 
   const [myHits, setMyHits] = useState<Set<string>>(new Set())
@@ -73,15 +93,37 @@ export default function Game({ myId, firstTurn, myTargetColors }: Props) {
       setGameOver(data.winner === myId ? 'win' : 'loss')
     })
 
+    socket.on('turn_changed', (data: { current_turn: string }) => {
+      setCurrentTurn(data.current_turn)
+    })
+
+    socket.on('radar_result', (data: RadarResult) => {
+      const nextProbabilities = normalizeRadarResult(data)
+      setRadarProbabilities(nextProbabilities)
+      setRadarArea(new Set(Object.keys(nextProbabilities)))
+      setRadarMode(false)
+      setSelectedRadarOrigin(null)
+      if (data.next_turn) setCurrentTurn(data.next_turn)
+    })
+
     return () => {
       socket.off('shot_result')
       socket.off('shot_received')
       socket.off('game_over')
+      socket.off('turn_changed')
+      socket.off('radar_result')
     }
   }, [myId])
 
   const handleEnemyCellClick = (row: number, col: number) => {
     if (!isMyTurn || gameOver) return
+    if (radarMode) {
+      const area = buildRadarArea(row, col, radarSize)
+      setSelectedRadarOrigin([row, col])
+      setRadarArea(new Set(area.map(([r, c]) => cellKey(r, c))))
+      setSelectedCell(null)
+      return
+    }
     const key = cellKey(row, col)
     if (enemyHits.has(key) || enemyMisses.has(key) || enemyDestroyed.has(key)) return
     setSelectedCell(prev => prev === key ? null : key)
@@ -92,6 +134,34 @@ export default function Game({ myId, firstTurn, myTargetColors }: Props) {
     const row = selectedCell.charCodeAt(0) - 65
     const col = parseInt(selectedCell.slice(1)) - 1
     socket.emit('play_turn', { turn_type: 'fire', cell: [row, col] })
+  }
+
+  const toggleRadarMode = () => {
+    if (!isMyTurn || gameOver) return
+    setRadarMode(prev => {
+      const next = !prev
+      setSelectedCell(null)
+      setSelectedRadarOrigin(null)
+      setRadarArea(new Set())
+      return next
+    })
+  }
+
+  const handleRadarSizeChange = (size: RadarSize) => {
+    setRadarSize(size)
+    setSelectedRadarOrigin(null)
+    setRadarArea(new Set())
+  }
+
+  const handleConfirmRadar = () => {
+    if (!selectedRadarOrigin || !isMyTurn || gameOver) return
+    const tiles = buildRadarArea(selectedRadarOrigin[0], selectedRadarOrigin[1], radarSize)
+    socket.emit('play_turn', {
+      turn_type: 'radar',
+      tiles,
+      type: 'radar',
+      payload: { tiles },
+    })
   }
 
   return (
@@ -126,16 +196,62 @@ export default function Game({ myId, firstTurn, myTargetColors }: Props) {
             missCells={enemyMisses}
             pingCells={enemyPings}
             selectedCell={selectedCell}
+            radarArea={radarArea}
+            probabilityMap={radarProbabilities}
             onCellClick={handleEnemyCellClick}
             disabled={!isMyTurn || !!gameOver}
           />
-          <button
-            onClick={handleFire}
-            disabled={!selectedCell || !isMyTurn || !!gameOver}
-            style={{ marginTop: 4, padding: '12px 36px', fontSize: 16 }}
-          >
-            {selectedCell ? `Fire at ${selectedCell}` : 'Select a cell to fire'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button
+              className={!radarMode ? 'active' : ''}
+              onClick={() => {
+                setRadarMode(false)
+                setSelectedRadarOrigin(null)
+                setRadarArea(new Set())
+              }}
+              disabled={!isMyTurn || !!gameOver}
+            >
+              Fire
+            </button>
+            <button
+              className={radarMode ? 'active' : ''}
+              onClick={toggleRadarMode}
+              disabled={!isMyTurn || !!gameOver}
+            >
+              Radar
+            </button>
+            <button
+              className={radarSize === 2 ? 'active' : ''}
+              onClick={() => handleRadarSizeChange(2)}
+              disabled={!radarMode || !isMyTurn || !!gameOver}
+            >
+              2x2
+            </button>
+            <button
+              className={radarSize === 3 ? 'active' : ''}
+              onClick={() => handleRadarSizeChange(3)}
+              disabled={!radarMode || !isMyTurn || !!gameOver}
+            >
+              3x3
+            </button>
+          </div>
+          {!radarMode ? (
+            <button
+              onClick={handleFire}
+              disabled={!selectedCell || !isMyTurn || !!gameOver}
+              style={{ marginTop: 4, padding: '12px 36px', fontSize: 16 }}
+            >
+              {selectedCell ? `Fire at ${selectedCell}` : 'Select a cell to fire'}
+            </button>
+          ) : (
+            <button
+              onClick={handleConfirmRadar}
+              disabled={!selectedRadarOrigin || !isMyTurn || !!gameOver}
+              style={{ marginTop: 4, padding: '12px 36px', fontSize: 16 }}
+            >
+              {selectedRadarOrigin ? `Scan ${radarSize}x${radarSize} area` : `Select a ${radarSize}x${radarSize} area`}
+            </button>
+          )}
         </div>
       </div>
 
@@ -167,4 +283,46 @@ export default function Game({ myId, firstTurn, myTargetColors }: Props) {
       )}
     </div>
   )
+}
+
+function buildRadarArea(row: number, col: number, size: RadarSize): [number, number][] {
+  const maxOrigin = 7 - size
+  const originRow = Math.min(row, maxOrigin)
+  const originCol = Math.min(col, maxOrigin)
+  const area: [number, number][] = []
+
+  for (let r = originRow; r < originRow + size; r += 1) {
+    for (let c = originCol; c < originCol + size; c += 1) {
+      area.push([r, c])
+    }
+  }
+
+  return area
+}
+
+function normalizeRadarResult(data: RadarResult): Record<string, number> {
+  const output: Record<string, number> = {}
+  const source = data.tiles ?? data.coords ?? data.probabilities
+
+  if (Array.isArray(source)) {
+    for (const item of source) {
+      const coord = item.coord ?? item.cell
+      if (!coord) continue
+      output[cellKey(coord[0], coord[1])] = clampProbability(item.probability)
+    }
+    return output
+  }
+
+  if (source) {
+    for (const [key, value] of Object.entries(source)) {
+      output[key] = clampProbability(value)
+    }
+  }
+
+  return output
+}
+
+function clampProbability(value: number): number {
+  if (value > 1) return Math.min(value / 100, 1)
+  return Math.max(0, Math.min(value, 1))
 }

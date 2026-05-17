@@ -104,6 +104,13 @@ def handle_play_turn(data):
         elif turn_type == "puzzle":
             #game.radar(request.sid, data)
             pass
+        elif turn_type == "radar":
+            enemy_id = game.player_a_id if game.player_a_id != request.sid else game.player_b_id
+            tiles = data.get("tiles") or data.get("payload", {}).get("tiles", [])
+            result = game.radar(request.sid, tiles)
+            game.current_turn = result["next_turn"]
+            emit("radar_result", result, to=request.sid)
+            emit("turn_changed", {"current_turn": result["next_turn"]}, to=enemy_id)
         else:
             emit("error", {"message": f"Unknown turn type: {turn_type}"})
 

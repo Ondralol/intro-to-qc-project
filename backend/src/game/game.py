@@ -107,6 +107,41 @@ class Game:
         # TODO
         pass
 
+    def radar(self, player_id, raw_tiles: list[list[int]]):
+        if self.phase != GamePhase.FIRING:
+            raise ValueError("Game is not in firing phase")
+
+        tiles = [tuple(tile) for tile in raw_tiles]
+        if len(tiles) not in (4, 9):
+            raise ValueError("Radar must scan a 2x2 or 3x3 area")
+
+        for tile in tiles:
+            if not (0 <= tile[0] < self.GRID_SIZE and 0 <= tile[1] < self.GRID_SIZE):
+                raise ValueError(f"Tile {tile} is out of bounds")
+
+        rows = sorted({tile[0] for tile in tiles})
+        cols = sorted({tile[1] for tile in tiles})
+        size = int(len(tiles) ** 0.5)
+        expected_tiles = {(row, col) for row in rows for col in cols}
+        if len(rows) != size or len(cols) != size or expected_tiles != set(tiles):
+            raise ValueError("Radar area must be a contiguous square")
+
+        enemy_id = self.player_a_id if self.player_a_id != player_id else self.player_b_id
+        next_turn = enemy_id
+        probabilities = []
+
+        for tile in tiles:
+            probability = self._target_probability_at(enemy_id, tile)
+            probabilities.append({
+                "coord": list(tile),
+                "probability": probability,
+            })
+
+        return {
+            "tiles": probabilities,
+            "next_turn": next_turn,
+        }
+
     def fire(self, player_id, coord: tuple[int, int]):
         enemy_id = self.player_a_id if self.player_a_id != player_id else self.player_b_id
         enemy_targets = self.targets[enemy_id]
@@ -191,6 +226,28 @@ class Game:
             return {"result": "hit", "cell": list(coord), "destroyed_cells": [], "pings": [], "next_turn": hit_turn, "game_over": False, "winner": None}
         return {"result": "miss", "cell": list(coord), "destroyed_cells": [], "pings": [], "next_turn": miss_turn, "game_over": False, "winner": None}
 
+    def _target_probability_at(self, player_id: str, coord: tuple[int, int]) -> float:
+        for target in self.targets[player_id]:
+            if coord not in target.anchor_a and coord not in target.anchor_b:
+                continue
+
+            if target.collapsed:
+                real_anchor = target.anchor_a if target.value == "0" else target.anchor_b
+                return 1.0 if coord in real_anchor else 0.0
+
+            probability_anchor_b = self._probability_anchor_b(target.theta)
+            if coord in target.anchor_b:
+                return probability_anchor_b
+            return 1.0 - probability_anchor_b
+
+        return 0.0
+
+    def _probability_anchor_b(self, theta: float) -> float:
+        # Ry(theta)|0> gives P(|1>) = sin(theta / 2)^2.
+        import math
+
+        return math.sin(theta / 2) ** 2
+
     def _check_game_over(self, loser_id: str):
         # Check all targets
         for target in self.targets[loser_id]:
@@ -206,5 +263,3 @@ class Game:
 
     def disconnected(self):
         self.phase = GamePhase.DISCONNECTED
-
-        

@@ -7,4 +7,5 @@ dependencies = [
     "flask-socketio",
     "flask-cors",
     "requests",
+    "gevent"
 ]

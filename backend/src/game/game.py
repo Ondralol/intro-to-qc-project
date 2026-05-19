@@ -21,7 +21,7 @@ class Game:
         self.ready = set() # players who have placed their targets
         # Radar puzzle state per player
         self.puzzles_solved: dict[str, int] = {}  # player_id -> count of solved radar puzzles
-        self.active_puzzle: dict[str, dict] = {}  # player_id -> last issued puzzle dict
+        self.active_puzzle: dict[str, "object"] = {}  # player_id -> last issued Puzzle
         self.radar_unlocked: dict[str, bool] = {}  # player_id -> can run one radar scan now
 
     def add_player(self, player_id: str):
@@ -107,8 +107,8 @@ class Game:
             self.current_turn = random.choice([self.player_a_id, self.player_b_id])
 
 
-    def issue_puzzle(self, player_id: str) -> dict:
-        """Roll a new radar puzzle for the player, scaled to how many they've solved."""
+    def issue_puzzle(self, player_id: str):
+        """Roll a new random radar puzzle for the player."""
         from game import puzzles
 
         if self.phase != GamePhase.FIRING:
@@ -116,21 +116,19 @@ class Game:
         if player_id not in (self.player_a_id, self.player_b_id):
             raise ValueError("Unknown player")
 
-        solved = self.puzzles_solved.get(player_id, 0)
-        tier = puzzles.tier_for_use(solved)
-        puzzle = puzzles.roll_puzzle(tier)
+        puzzle = puzzles.roll_puzzle()
         self.active_puzzle[player_id] = puzzle
         return puzzle
 
-    def submit_puzzle(self, player_id: str, puzzle_id: str, gates: list[dict]) -> dict:
+    def submit_puzzle(self, player_id: str, puzzle_id: str, gates: list[str]) -> dict:
         """Evaluate the player's submission against the puzzle they were issued."""
         from game import puzzles
 
         puzzle = self.active_puzzle.get(player_id)
-        if not puzzle or puzzle["puzzle_id"] != puzzle_id:
+        if not puzzle or puzzle.puzzle_id != puzzle_id:
             raise ValueError("No active puzzle for this player")
 
-        result = puzzles.evaluate(puzzle, gates, shots=puzzle["shots"])
+        result = puzzles.evaluate(puzzle, gates, shots=puzzle.shots)
         if result["passed"]:
             self.puzzles_solved[player_id] = self.puzzles_solved.get(player_id, 0) + 1
             self.radar_unlocked[player_id] = True

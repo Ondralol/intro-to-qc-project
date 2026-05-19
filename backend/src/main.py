@@ -115,21 +115,10 @@ def handle_play_turn(data):
 @socketio.on("request_puzzle")
 def handle_request_puzzle():
     try:
+        from game.puzzles import puzzle_payload
         game = manager.get_game_for_player(request.sid)
         puzzle = game.issue_puzzle(request.sid)
-        # Don't leak target_distribution / threshold? The frontend already needs the
-        # description; distribution + threshold are useful for the live preview but
-        # not strictly required. We send the public fields the UI needs.
-        emit("puzzle_issued", {
-            "puzzle_id": puzzle["puzzle_id"],
-            "tier": puzzle["tier"],
-            "n_qubits": puzzle["n_qubits"],
-            "initial_state": puzzle["initial_state"],
-            "target_description": puzzle["target_description"],
-            "gate_palette": puzzle["gate_palette"],
-            "ry_thetas": puzzle.get("ry_thetas", []),
-            "max_gates": puzzle["max_gates"],
-        })
+        emit("puzzle_issued", puzzle_payload(puzzle))
     except Exception as e:
         emit("error", {"message": str(e)})
 

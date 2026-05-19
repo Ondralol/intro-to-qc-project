@@ -51,3 +51,6 @@ pnpm-debug.log*
 Thumbs.db
 
 materials/
+.claude\settings.local.json
+docs
+.claude

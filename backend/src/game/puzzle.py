@@ -148,55 +148,81 @@ def evaluate(puzzle: Puzzle, gates: List[str], shots: int = 1000) -> dict:
 # Field names normalised (main had two inconsistent spellings) and
 # `expected_measurement` is always a string so `counts.get(...)` works.
 
+# Contains all the puzzle options for the easier puzzle version (2x2 Radar)
 PUZZLES_EASY: List[Puzzle] = [
-    # Trivial.
-    Puzzle("|0>", "|1>", ["X", "H", "Z", "I"], ["X"],           1, 10, [],     "1", "Not all gates are useful."),
-    Puzzle("|0>", "|+>", ["X", "H", "Z", "I"], ["H"],           1, 10, ["H"],  "0", "Not all gates are useful."),
-    Puzzle("|+>", "|->", ["X", "H", "Z", "I"], ["Z"],           1, 10, ["H"],  "1", "Not all gates are useful."),
-    Puzzle("|->", "|1>", ["X", "H", "Z", "I"], ["H"],           1, 10, [],     "1", "Not all gates are useful."),
+    # Actually super easy
+    Puzzle(initial_state="|0>", goal_state="|1>", available_gates=["X", "H", "Z", "I"],
+            solution=["X"], min_gates=1, max_gates=10, gates_before_measurement=[],
+            expected_measurement="1", note="Not all gates are useful."),
+    Puzzle(initial_state="|0>", goal_state="|+>", available_gates=["X", "H", "Z", "I"],
+            solution=["H"], min_gates=1, max_gates=10, gates_before_measurement=["H"],
+            expected_measurement="0", note="Not all gates are useful."),
+    Puzzle(initial_state="|+>", goal_state="|->", available_gates=["X", "H", "Z", "I"],
+            solution=["Z"], min_gates=1, max_gates=10, gates_before_measurement=["H"],
+            expected_measurement="1", note="Not all gates are useful."),
+    Puzzle(initial_state="|->", goal_state="|1>", available_gates=["X", "H", "Z", "I"],
+            solution=["H"], min_gates=1, max_gates=10, gates_before_measurement=[],
+            expected_measurement="1", note="Not all gates are useful."),
 
-    # Two-gate solutions.
-    Puzzle("|0>", "|->", ["X", "H", "Z", "I"], ["X", "H"],      1, 10, ["H"],  "1", "Not all gates are useful."),
-    Puzzle("|1>", "|+>", ["X", "H", "I"],      ["X", "H"],      1, 10, ["H"],  "0", "Not all gates are useful."),
-    Puzzle("|+>", "|1>", ["X", "H", "Z", "I"], ["H", "X"],      1, 10, [],     "1", "Not all gates are useful."),
+    # Still easy, but bit more difficult
+    Puzzle(initial_state="|0>", goal_state="|->", available_gates=["X", "H", "Z", "I"],
+            solution=["X", "H"], min_gates=1, max_gates=10, gates_before_measurement=["H"],
+            expected_measurement="1", note="Not all gates are useful."),
+    Puzzle(initial_state="|1>", goal_state="|+>", available_gates=["X", "H", "I"],
+            solution=["X", "H"], min_gates=1, max_gates=10, gates_before_measurement=["H"],
+            expected_measurement="0", note="Not all gates are useful."),
+    Puzzle(initial_state="|+>", goal_state="|1>", available_gates=["X", "H", "Z", "I"],
+            solution=["H", "X"], min_gates=1, max_gates=10, gates_before_measurement=[],
+            expected_measurement="1", note="Not all gates are useful."),
 
-    # Three-gate solution.
-    Puzzle("|0>", "|1>", ["H", "Z", "I"],      ["H", "Z", "H"], 1, 10, [],     "1", "Not all gates are useful."),
+    # More difficult
+    Puzzle(initial_state="|0>", goal_state="|1>", available_gates=["H", "Z", "I"],
+            solution=["H", "Z", "H"], min_gates=1, max_gates=10, gates_before_measurement=[],
+            expected_measurement="1", note="Not all gates are useful."),
 ]
 
+
+# Contains all the puzzle options for the harder puzzle version (3x3 Radar)
 PUZZLES_HARD: List[Puzzle] = [
-    # Hard 1-qubit.
-    Puzzle("|0>", "|+>",
-           ["X", "Z", "Ry(pi/4)", "S", "I"],
-           ["Ry(pi/4)", "Ry(pi/4)"], 1, 10, ["H"], "0",
-           "Think carefully."),
+    # Hard 1-qubit
+    Puzzle(initial_state="|0>", goal_state="|+>",
+            available_gates=["X", "Z", "Ry(pi/4)", "S", "I"],
+            solution=["Ry(pi/4)", "Ry(pi/4)"], min_gates=1, max_gates=10,
+            gates_before_measurement=["H"], expected_measurement="0",
+            note="Think carefully."),
 
-    Puzzle("|->", "|+>",
-           ["X", "H", "Ry(pi/2)", "S", "T", "I"],
-           ["Ry(pi/2)", "H"], 1, 10, ["H"], "0",
-           "There are multiple solutions."),
+    Puzzle(initial_state="|->", goal_state="|+>",
+            available_gates=["X", "H", "Ry(pi/2)", "S", "T", "I"],
+            solution=["Ry(pi/2)", "H"], min_gates=1, max_gates=10,
+            gates_before_measurement=["H"], expected_measurement="0",
+            note="There are multiple solutions."),
 
-    Puzzle("|+>", "|0>",
-           ["X", "Z", "Ry(pi/2)", "S", "I"],
-           ["Z", "Ry(pi/2)"], 1, 10, [], "0",
-           "Not all gates are useful."),
+    Puzzle(initial_state="|+>", goal_state="|0>",
+            available_gates=["X", "Z", "Ry(pi/2)", "S", "I"],
+            solution=["Z", "Ry(pi/2)"], min_gates=1, max_gates=10,
+            gates_before_measurement=[], expected_measurement="0",
+            note="Not all gates are useful."),
 
-    # 2-qubit entanglement puzzles. The basis-change CNOT,H maps
-    # (|00> + |11>)/sqrt(2) -> |00> so we can measure deterministically.
-    Puzzle("|00>", "(|00> + |11>) / sqrt(2)",
-           ["H_0", "H_1", "X_0", "X_1", "Z_0", "CNOT_0_1", "CNOT_1_0"],
-           ["H_0", "CNOT_0_1"], 1, 10, ["CNOT_0_1", "H_0"], "00",
-           "You'll need to entangle the qubits."),
 
-    Puzzle("|00>", "(|01> + |10>) / sqrt(2)",
-           ["H_0", "H_1", "X_0", "X_1", "Z_0", "CNOT_0_1", "CNOT_1_0"],
-           ["X_1", "H_0", "CNOT_0_1"], 1, 10, ["CNOT_0_1", "H_0"], "01",
-           "You'll need to entangle the qubits."),
+    # 2-qubit puzzles
+    Puzzle(initial_state="|00>", goal_state="(|00> + |11>) / sqrt(2)",
+            available_gates=["H_0", "H_1", "X_0", "X_1", "Z_0", "CNOT_0_1", "CNOT_1_0"],
+            solution=["H_0", "CNOT_0_1"], min_gates=1, max_gates=10,
+            gates_before_measurement=["CNOT_0_1", "H_0"], expected_measurement="00",
+            note="You'll need to entangle the qubits."),
 
-    Puzzle("|11>", "(|00> + |11>) / sqrt(2)",
-           ["H_0", "H_1", "X_0", "X_1", "Z_0", "Z_1", "CNOT_0_1", "CNOT_1_0"],
-           ["X_0", "X_1", "H_0", "CNOT_0_1"], 3, 10, ["CNOT_0_1", "H_0"], "00",
-           "Think about what state you need before entangling."),
+
+    Puzzle(initial_state="|00>", goal_state="(|01> + |10>) / sqrt(2)",
+            available_gates=["H_0", "H_1", "X_0", "X_1", "Z_0", "CNOT_0_1", "CNOT_1_0"],
+            solution=["X_1", "H_0", "CNOT_0_1"], min_gates=1, max_gates=10,
+            gates_before_measurement=["CNOT_0_1", "H_0"], expected_measurement="01",
+            note="You'll need to entangle the qubits."),
+
+    Puzzle(initial_state="|11>", goal_state="(|00> + |11>) / sqrt(2)",
+            available_gates=["H_0", "H_1", "X_0", "X_1", "Z_0", "Z_1", "CNOT_0_1", "CNOT_1_0"],
+            solution=["X_0", "X_1", "H_0", "CNOT_0_1"], min_gates=3, max_gates=10,
+            gates_before_measurement=["CNOT_0_1", "H_0"], expected_measurement="00",
+            note="Think about what state you need before entangling."),
 ]
 
 

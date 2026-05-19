@@ -111,6 +111,33 @@ def handle_play_turn(data):
         emit("error", {"message": str(e)})
 
 
+# Player asks for a new random radar puzzle.
+@socketio.on("request_puzzle")
+def handle_request_puzzle():
+    try:
+        from game.puzzle import puzzle_payload
+        game = manager.get_game_for_player(request.sid)
+        p = game.issue_puzzle(request.sid)
+        emit("puzzle_issued", puzzle_payload(p))
+    except Exception as e:
+        emit("error", {"message": str(e)})
+
+
+# Player submits a gate sequence (list of strings) for the active puzzle.
+@socketio.on("submit_puzzle")
+def handle_submit_puzzle(data):
+    try:
+        game = manager.get_game_for_player(request.sid)
+        result = game.submit_puzzle(request.sid, data["puzzle_id"], data.get("gates", []))
+        emit("puzzle_result", {
+            "passed": result["passed"],
+            "score": result["score"],
+            "counts": result["counts"],
+        })
+    except Exception as e:
+        emit("error", {"message": str(e)})
+
+
 def main():
     socketio.run(app, host="0.0.0.0", port=5000, debug=True, use_reloader=False)
 

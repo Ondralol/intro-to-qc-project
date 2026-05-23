@@ -119,21 +119,11 @@ def handle_play_turn(data):
                 emit("error", {"message": "No radar available, solve a puzzle first"})
                 return
             game.radar_ready.discard(request.sid)
+            cells = [tuple(c) for c in data["cells"]]
+            scan = game.radar_scan(request.sid, cells)
             enemy_id = game.player_a_id if game.player_a_id != request.sid else game.player_b_id
-            # TODO
-            result = game.fire(request.sid, tuple(data["cell"]))
-            game.current_turn = result["next_turn"]
-            shot_data = {
-                "cell": result["cell"],
-                "result": result["result"],
-                "destroyed_cells": result["destroyed_cells"],
-                "pings": result["pings"],
-                "next_turn": result["next_turn"],
-            }
-            emit("shot_result", shot_data, to=request.sid)
-            emit("shot_received", shot_data, to=enemy_id)
-            if result["game_over"]:
-                emit("game_over", {"winner": result["winner"]}, to=game.game_id)
+            game.current_turn = enemy_id
+            emit("radar_result", {"scan": scan, "next_turn": enemy_id})
 
         else:
             emit("error", {"message": f"Unknown turn type: {turn_type}"})

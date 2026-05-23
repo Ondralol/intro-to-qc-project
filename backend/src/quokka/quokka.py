@@ -39,6 +39,55 @@ def fire_shot(target1: Target, target2: Target) -> str:
     return max(counts, key=counts.get)
 
 
+def radar_scan(
+    targets: List[Target],
+    entangled_pairs: List[tuple],
+    scan_qubits: List[int],
+    shots: int = 100,
+) -> dict[int, float]:
+    """Reconstruct quantum state and return P(qubit=1) for each scanned qubit.
+
+    For uncollapsed pairs: Ry(θ) + CX to recreate superposition.
+    For collapsed pairs: X gate to hardcode the known value.
+    Uses creg c[4] so outcome[i] maps directly to qubit i.
+    """
+    qubit_to_target = {t.qubit_index: t for t in targets}
+
+    lines = [
+        "OPENQASM 2.0;",
+        'include "qelib1.inc";',
+        "qreg q[4];",
+        "creg c[4];",
+    ]
+
+    for pair in entangled_pairs:
+        t0 = qubit_to_target.get(pair[0])
+        t1 = qubit_to_target.get(pair[1])
+        if t0 is None or t1 is None:
+            continue
+        if t0.collapsed:
+            if t0.value == "1":
+                lines.append(f"x q[{pair[0]}];")
+            if t1.value == "1":
+                lines.append(f"x q[{pair[1]}];")
+        else:
+            lines.append(f"ry({t0.theta}) q[{pair[0]}];")
+            lines.append(f"cx q[{pair[0]}], q[{pair[1]}];")
+
+    for q in scan_qubits:
+        lines.append(f"measure q[{q}] -> c[{q}];")
+
+    counts = send_to_quokka("\n".join(lines) + "\n", shots)
+
+    total = sum(counts.values())
+    qubit_p1 = {}
+    for q in scan_qubits:
+        ones = sum(count for outcome, count in counts.items() if outcome[q] == "1")
+        qubit_p1[q] = round(ones / total, 4)
+
+    return qubit_p1
+
+
 def evaluate_puzzle(puzzle: Puzzle, gates: List[str], shots: int = 100, threshold = 0.8) -> dict:
     """Run the player's circuit on Quokka and evaluate it."""
 

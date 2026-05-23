@@ -132,6 +132,45 @@ class Game:
             self.radar_ready.add(player_id)
         return result
 
+    def radar_scan(self, player_id: str, cells: list[tuple[int, int]]) -> list[dict]:
+        """Reconstruct quantum state via Quokka and return per-cell probabilities."""
+        from quokka.quokka import radar_scan as quokka_radar_scan
+
+        enemy_id = self.player_a_id if self.player_a_id != player_id else self.player_b_id
+        enemy_targets = self.targets[enemy_id]
+
+        # Map cells to which enemy target qubits they overlap with.
+        cell_set = set(cells)
+        cell_info: dict[tuple, tuple] = {}  # cell -> (target, anchor)
+        scan_qubits: set[int] = set()
+        for t in enemy_targets:
+            for cell in t.anchor_a:
+                if cell in cell_set:
+                    cell_info[cell] = (t, "a")
+                    scan_qubits.add(t.qubit_index)
+            for cell in t.anchor_b:
+                if cell in cell_set:
+                    cell_info[cell] = (t, "b")
+                    scan_qubits.add(t.qubit_index)
+
+        if not scan_qubits:
+            return [{"cell": list(c), "probability": 0.0} for c in cells]
+
+        # Probability of anchor B for all targets
+        qubit_p1 = quokka_radar_scan(enemy_targets, self.ENTANGLED_PAIRS, list(scan_qubits))
+
+        # Map the qubit probabilities back to the cells
+        result = []
+        for cell in cells:
+            if cell not in cell_info:
+                result.append({"cell": list(cell), "probability": 0.0})
+            else:
+                t, anchor = cell_info[cell]
+                p1 = qubit_p1[t.qubit_index]
+                prob = (1.0 - p1) if anchor == "a" else p1
+                result.append({"cell": list(cell), "probability": prob})
+        return result
+
     def fire(self, player_id, coord: tuple[int, int]):
         enemy_id = self.player_a_id if self.player_a_id != player_id else self.player_b_id
         enemy_targets = self.targets[enemy_id]

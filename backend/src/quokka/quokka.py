@@ -3,9 +3,11 @@ import requests
 from collections import Counter
 
 from game.game_helper import Target
+from game.puzzle import Puzzle, build_circuit
+from typing import List
 
 
-def send_to_quokka(program, count=1, my_quokka='quokka5'):
+def send_to_quokka(program, count=1, my_quokka='quokka1'):
     request_http = 'https://{}.quokkacomputing.com/qsim/qasm'.format(my_quokka)
     data = {'script': program, 'count': count}
     result = requests.post(request_http, json=data, verify=True)
@@ -35,3 +37,30 @@ def fire_shot(target1: Target, target2: Target) -> str:
     counts = send_to_quokka(qasm, count=1)
     # Either returns "00" or "11" in our case
     return max(counts, key=counts.get)
+
+
+def evaluate_puzzle(puzzle: Puzzle, gates: List[str], shots: int = 100, threshold = 0.8) -> dict:
+    """Run the player's circuit on Quokka and evaluate it."""
+
+    # Player used too few gates
+    if len(gates) > puzzle.max_gates:
+        return {"passed": False, "score": 0.0, "counts": {}, "qasm": "", "error": "Gate budget exceeded"}
+    
+    # Player used too many gates
+    if len(gates) < puzzle.min_gates:
+        return {"passed": False, "score": 0.0, "counts": {}, "qasm": "", "error": f"Use at least {puzzle.min_gates} gate(s)"}
+    
+    # Player used unavailable gates
+    for g in gates:
+        if g not in puzzle.available_gates:
+            return {"passed": False, "score": 0.0, "counts": {}, "qasm": "", "error": f"Gate {g} not availabe"}
+
+    # Evaluate results compared to the expected state
+    qasm = build_circuit(puzzle, gates)
+    counts = send_to_quokka(qasm, shots)
+    score = counts.get(str(puzzle.expected_measurement), 0) / shots
+    return {
+        "passed": score >= threshold,
+        "score": score,
+        "qasm": qasm,
+    }

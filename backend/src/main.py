@@ -112,7 +112,7 @@ def handle_play_turn(data):
 
 
 def main():
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+    socketio.run(app, host="0.0.0.0", port=5000, debug=True, use_reloader=False)
 
 
 if __name__ == "__main__":

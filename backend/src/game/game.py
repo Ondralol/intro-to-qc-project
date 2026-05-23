@@ -19,6 +19,9 @@ class Game:
         self.winner = None
         self.targets: dict[str, list[Target]] = {}  # player_id -> their 4 targets
         self.ready = set() # players who have placed their targets
+        # Puzzle the player most recently requested but hasn't yet resolved.
+        self.active_puzzle: dict = {}  # player_id -> Puzzle        
+        self.radar_ready: set = set()  # players who passed their puzzle and can fire radar this turn
 
     def add_player(self, player_id: str):
         self.player_b_id = player_id
@@ -103,9 +106,70 @@ class Game:
             self.current_turn = random.choice([self.player_a_id, self.player_b_id])
 
 
-    def play_puzzle(self):
-        # TODO
-        pass
+    def issue_puzzle(self, player_id: str, difficulty: str):
+        """Roll a fresh puzzle of the given difficulty for the player."""
+        from game.puzzle import roll_puzzle
+
+        if self.phase != GamePhase.FIRING:
+            raise ValueError("Puzzles only available during firing phase")
+        if player_id not in (self.player_a_id, self.player_b_id):
+            raise ValueError("Unknown player")
+
+        p = roll_puzzle(difficulty)
+        self.active_puzzle[player_id] = p
+        return p
+
+    def submit_puzzle(self, player_id: str, gates: list[str]) -> dict:
+        """Evaluate the player's gate sequence. Unlocks radar this turn if passed."""
+        from quokka.quokka import evaluate_puzzle
+
+        p = self.active_puzzle.pop(player_id, None)
+        if not p:
+            raise ValueError("No active puzzle for this player")
+
+        result = evaluate_puzzle(p, gates)
+        if result["passed"]:
+            self.radar_ready.add(player_id)
+        return result
+
+    def radar_scan(self, player_id: str, cells: list[tuple[int, int]]) -> list[dict]:
+        """Reconstruct quantum state via Quokka and return per-cell probabilities."""
+        from quokka.quokka import radar_scan as quokka_radar_scan
+
+        enemy_id = self.player_a_id if self.player_a_id != player_id else self.player_b_id
+        enemy_targets = self.targets[enemy_id]
+
+        # Map cells to which enemy target qubits they overlap with.
+        cell_set = set(cells)
+        cell_info: dict[tuple, tuple] = {}  # cell -> (target, anchor)
+        scan_qubits: set[int] = set()
+        for t in enemy_targets:
+            for cell in t.anchor_a:
+                if cell in cell_set:
+                    cell_info[cell] = (t, "a")
+                    scan_qubits.add(t.qubit_index)
+            for cell in t.anchor_b:
+                if cell in cell_set:
+                    cell_info[cell] = (t, "b")
+                    scan_qubits.add(t.qubit_index)
+
+        if not scan_qubits:
+            return [{"cell": list(c), "probability": 0.0} for c in cells]
+
+        # Probability of anchor B for all targets
+        qubit_p1 = quokka_radar_scan(enemy_targets, self.ENTANGLED_PAIRS, list(scan_qubits))
+
+        # Map the qubit probabilities back to the cells
+        result = []
+        for cell in cells:
+            if cell not in cell_info:
+                result.append({"cell": list(cell), "probability": 0.0})
+            else:
+                t, anchor = cell_info[cell]
+                p1 = qubit_p1[t.qubit_index]
+                prob = (1.0 - p1) if anchor == "a" else p1
+                result.append({"cell": list(cell), "probability": prob})
+        return result
 
     def fire(self, player_id, coord: tuple[int, int]):
         enemy_id = self.player_a_id if self.player_a_id != player_id else self.player_b_id

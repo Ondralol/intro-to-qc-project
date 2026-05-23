@@ -133,11 +133,16 @@ export default function Board({
                 )}
 
                 {probability !== undefined && (
-                  <div style={{
-                    position: 'absolute', inset: 0,
-                    background: `rgba(68, 170, 255, ${probability * 0.5})`,
-                    pointerEvents: 'none',
-                  }} />
+                  <>
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      background: `rgba(68, 170, 255, ${0.12 + probability * 0.58})`,
+                      pointerEvents: 'none',
+                    }} />
+                    <div className="board-probability">
+                      {Math.round(probability * 100)}%
+                    </div>
+                  </>
                 )}
 
                 {hasPing && (

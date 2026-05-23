@@ -100,15 +100,38 @@ def handle_play_turn(data):
             if result["game_over"]:
                 emit("game_over", {"winner": result["winner"]}, to=game.game_id)
         
-        # If puzzle
         elif turn_type == "puzzle":
-            #game.radar(request.sid, data)
-            pass
+            from game.puzzle import puzzle_payload
+            difficulty = data.get("difficulty", "easy")
+            p = game.issue_puzzle(request.sid, difficulty)
+            emit("puzzle", puzzle_payload(p))
+
+        elif turn_type == "submit_puzzle":
+            result = game.submit_puzzle(request.sid, data.get("gates", []))
+            emit("puzzle_result", {
+                "passed": result["passed"],
+                "score": result["score"],
+                "error": result.get("error"),
+            })
+
+        elif turn_type == "submit_radar":
+            if request.sid not in game.radar_ready:
+                emit("error", {"message": "No radar available, solve a puzzle first"})
+                return
+            game.radar_ready.discard(request.sid)
+            cells = [tuple(c) for c in data["cells"]]
+            scan = game.radar_scan(request.sid, cells)
+            enemy_id = game.player_a_id if game.player_a_id != request.sid else game.player_b_id
+            game.current_turn = enemy_id
+            emit("radar_result", {"scan": scan, "next_turn": enemy_id})
+
         else:
             emit("error", {"message": f"Unknown turn type: {turn_type}"})
 
     except Exception as e:
         emit("error", {"message": str(e)})
+
+
 
 
 def main():

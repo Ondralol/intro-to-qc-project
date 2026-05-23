@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import random
 from dataclasses import dataclass
 from typing import List
 
@@ -205,9 +206,14 @@ def build_circuit(puzzle: Puzzle, player_gates: List[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def roll_puzzle(difficulty: str) -> Puzzle:
+    pool = PUZZLES_EASY if difficulty == "easy" else PUZZLES_HARD
+    return random.choice(pool)
+
+
 def puzzle_payload(puzzle: Puzzle) -> dict:
-    """Creates a payload that will be sent to the UI"""
     return {
+        "n_qubits": N_QUBITS[puzzle.initial_state],
         "initial_state": puzzle.initial_state,
         "goal_state": puzzle.goal_state,
         "available_gates": puzzle.available_gates,

@@ -20,7 +20,8 @@ class Game:
         self.targets: dict[str, list[Target]] = {}  # player_id -> their 4 targets
         self.ready = set() # players who have placed their targets
         # Puzzle the player most recently requested but hasn't yet resolved.
-        self.active_puzzle: dict = {}  # player_id -> Puzzle
+        self.active_puzzle: dict = {}  # player_id -> Puzzle        
+        self.radar_ready: set = set()  # players who passed their puzzle and can fire radar this turn
 
     def add_player(self, player_id: str):
         self.player_b_id = player_id
@@ -105,31 +106,30 @@ class Game:
             self.current_turn = random.choice([self.player_a_id, self.player_b_id])
 
 
-    def issue_puzzle(self, player_id: str):
-        """Roll a fresh random puzzle for the player and stash it as active."""
-        from game import puzzle as puzzle_module
+    def issue_puzzle(self, player_id: str, difficulty: str):
+        """Roll a fresh puzzle of the given difficulty for the player."""
+        from game.puzzle import roll_puzzle
 
         if self.phase != GamePhase.FIRING:
             raise ValueError("Puzzles only available during firing phase")
         if player_id not in (self.player_a_id, self.player_b_id):
             raise ValueError("Unknown player")
 
-        p = puzzle_module.roll_puzzle()
+        p = roll_puzzle(difficulty)
         self.active_puzzle[player_id] = p
         return p
 
-    def submit_puzzle(self, player_id: str, puzzle_id: str, gates: list[str]) -> dict:
-        """Evaluate the player's gate sequence against their active puzzle."""
-        from game import puzzle as puzzle_module
+    def submit_puzzle(self, player_id: str, gates: list[str]) -> dict:
+        """Evaluate the player's gate sequence. Unlocks radar this turn if passed."""
+        from quokka.quokka import evaluate_puzzle
 
-        p = self.active_puzzle.get(player_id)
-        if not p or p.puzzle_id != puzzle_id:
+        p = self.active_puzzle.pop(player_id, None)
+        if not p:
             raise ValueError("No active puzzle for this player")
 
-        result = puzzle_module.evaluate(p, gates, shots=p.shots)
-        # A submission consumes the puzzle either way; the player must request
-        # a new one to try again.
-        self.active_puzzle.pop(player_id, None)
+        result = evaluate_puzzle(p, gates)
+        if result["passed"]:
+            self.radar_ready.add(player_id)
         return result
 
     def fire(self, player_id, coord: tuple[int, int]):

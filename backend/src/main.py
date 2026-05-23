@@ -100,10 +100,41 @@ def handle_play_turn(data):
             if result["game_over"]:
                 emit("game_over", {"winner": result["winner"]}, to=game.game_id)
         
-        # If puzzle
         elif turn_type == "puzzle":
-            #game.radar(request.sid, data)
-            pass
+            from game.puzzle import puzzle_payload
+            difficulty = data.get("difficulty", "easy")
+            p = game.issue_puzzle(request.sid, difficulty)
+            emit("puzzle", puzzle_payload(p))
+
+        elif turn_type == "submit_puzzle":
+            result = game.submit_puzzle(request.sid, data.get("gates", []))
+            emit("puzzle_result", {
+                "passed": result["passed"],
+                "score": result["score"],
+                "error": result.get("error"),
+            })
+
+        elif turn_type == "submit_radar":
+            if request.sid not in game.radar_ready:
+                emit("error", {"message": "No radar available, solve a puzzle first"})
+                return
+            game.radar_ready.discard(request.sid)
+            enemy_id = game.player_a_id if game.player_a_id != request.sid else game.player_b_id
+            # TODO
+            result = game.fire(request.sid, tuple(data["cell"]))
+            game.current_turn = result["next_turn"]
+            shot_data = {
+                "cell": result["cell"],
+                "result": result["result"],
+                "destroyed_cells": result["destroyed_cells"],
+                "pings": result["pings"],
+                "next_turn": result["next_turn"],
+            }
+            emit("shot_result", shot_data, to=request.sid)
+            emit("shot_received", shot_data, to=enemy_id)
+            if result["game_over"]:
+                emit("game_over", {"winner": result["winner"]}, to=game.game_id)
+
         else:
             emit("error", {"message": f"Unknown turn type: {turn_type}"})
 
@@ -111,31 +142,6 @@ def handle_play_turn(data):
         emit("error", {"message": str(e)})
 
 
-# Player asks for a new random radar puzzle.
-@socketio.on("request_puzzle")
-def handle_request_puzzle():
-    try:
-        from game.puzzle import puzzle_payload
-        game = manager.get_game_for_player(request.sid)
-        p = game.issue_puzzle(request.sid)
-        emit("puzzle_issued", puzzle_payload(p))
-    except Exception as e:
-        emit("error", {"message": str(e)})
-
-
-# Player submits a gate sequence (list of strings) for the active puzzle.
-@socketio.on("submit_puzzle")
-def handle_submit_puzzle(data):
-    try:
-        game = manager.get_game_for_player(request.sid)
-        result = game.submit_puzzle(request.sid, data["puzzle_id"], data.get("gates", []))
-        emit("puzzle_result", {
-            "passed": result["passed"],
-            "score": result["score"],
-            "counts": result["counts"],
-        })
-    except Exception as e:
-        emit("error", {"message": str(e)})
 
 
 def main():

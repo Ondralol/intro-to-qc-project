@@ -2,20 +2,18 @@ import { useEffect, useState } from 'react'
 import { socket } from '../socket'
 import './PuzzleOverlay.css'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 interface PuzzleData {
-  initial: string
-  target: string
-  description: string
-  hint: string
+  initial_state: string
+  goal_state: string
+  note: string
   available_gates?: string[]
+  min_gates?: number
+  max_gates?: number
 }
 
 interface PuzzleResult {
   passed: boolean
-  probability: number
-  radar_unlocked: boolean
+  score: number
 }
 
 export interface Props {
@@ -27,31 +25,24 @@ export type RadarSize = '2x2' | '3x3'
 
 type Step = 'size' | 'loading' | 'puzzle' | 'result'
 
-// ── Gate colours ──────────────────────────────────────────────────────────────
-
 const GATE_COLOR: Record<string, string> = {
   H: '#44aaff',
   X: '#ff4444',
   Z: '#44cc66',
   Y: '#ff8800',
   S: '#aa44ff',
-  CNOT: '#ff44aa',
+  T: '#ff44aa',
 }
 
 function gateColor(g: string) {
-  return GATE_COLOR[g] ?? '#888'
+  const base = g.replace(/_\d+$/, '').replace(/\(.*\).*$/, '')
+  return GATE_COLOR[base] ?? '#888' // fallback to gray color
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-/** Visual grid showing the radar area preview */
 function RadarGrid({ size }: { size: RadarSize }) {
   const n = size === '2x2' ? 2 : 3
   return (
-    <div
-      className="radar-grid"
-      style={{ gridTemplateColumns: `repeat(${n}, 22px)` }}
-    >
+    <div className="radar-grid" style={{ gridTemplateColumns: `repeat(${n}, 22px)` }}>
       {Array.from({ length: n * n }).map((_, i) => (
         <div key={i} className="radar-cell" />
       ))}
@@ -59,173 +50,73 @@ function RadarGrid({ size }: { size: RadarSize }) {
   )
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-
 export default function PuzzleOverlay({ onClose, onRadarUnlocked }: Props) {
   const [step, setStep] = useState<Step>('size')
   const [radarSize, setRadarSize] = useState<RadarSize | null>(null)
   const [puzzleData, setPuzzleData] = useState<PuzzleData | null>(null)
   const [gates, setGates] = useState<string[]>([])
   const [puzzleResult, setPuzzleResult] = useState<PuzzleResult | null>(null)
-  const [failCount, setFailCount] = useState(0)
-
-  // ── Drag state ─────────────────────────────────────────────────────────────
-
-  // What is currently being dragged
-  type DragSource =
-    | { from: 'palette'; gate: string }
-    | { from: 'circuit'; gate: string; index: number }
-
-  const [dragging, setDragging] = useState<DragSource | null>(null)
-  // Which drop-zone index is highlighted (0 = before gate 0, 1 = after gate 0 …)
-  const [dropIndex, setDropIndex] = useState<number | null>(null)
-  // Whether pointer is over the palette area (to show "remove" hint)
-  const [overPalette, setOverPalette] = useState(false)
-
-  // ── Socket listeners ───────────────────────────────────────────────────────
 
   useEffect(() => {
     const onPuzzleData = (data: PuzzleData) => {
       setPuzzleData(data)
       setGates([])
-      setPuzzleResult(null)
       setStep('puzzle')
     }
-
     const onPuzzleResult = (data: PuzzleResult) => {
       setPuzzleResult(data)
-      if (!data.passed) {
-        setFailCount(c => c + 1)
-      } else if (radarSize) {
-        onRadarUnlocked(radarSize)
-      }
       setStep('result')
     }
-
-    socket.on('puzzle_data', onPuzzleData)
+    socket.on('puzzle', onPuzzleData)
     socket.on('puzzle_result', onPuzzleResult)
     return () => {
-      socket.off('puzzle_data', onPuzzleData)
+      socket.off('puzzle', onPuzzleData)
       socket.off('puzzle_result', onPuzzleResult)
     }
-  }, [radarSize, onRadarUnlocked])
-
-  // ── Actions ────────────────────────────────────────────────────────────────
+  }, [])
 
   const confirmSize = () => {
     if (!radarSize) return
     setStep('loading')
-    socket.emit('play_turn', { turn_type: 'get_puzzle', radar_size: radarSize })
+    socket.emit('play_turn', { turn_type: 'puzzle', difficulty: radarSize === '2x2' ? 'easy' : 'hard' })
   }
 
   const submitPuzzle = () => {
     if (!gates.length) return
     setStep('loading')
-    socket.emit('play_turn', { turn_type: 'puzzle', gates, radar_size: radarSize })
+    socket.emit('play_turn', { turn_type: 'submit_puzzle', gates, radar_size: radarSize })
   }
 
-  const tryAgain = () => {
-    setGates([])
-    setPuzzleResult(null)
-    setStep('puzzle')
-  }
-
-  const clearGates = () => setGates([])
-
-  // ── Drag handlers ──────────────────────────────────────────────────────────
-
-  const startPaletteDrag = (gate: string) => setDragging({ from: 'palette', gate })
-
-  const startCircuitDrag = (index: number, gate: string) =>
-    setDragging({ from: 'circuit', gate, index })
-
-  const endDrag = () => {
-    setDragging(null)
-    setDropIndex(null)
-    setOverPalette(false)
-  }
-
-  const onDropZoneOver = (e: React.DragEvent, idx: number) => {
-    e.preventDefault()
-    setDropIndex(idx)
-    setOverPalette(false)
-  }
-
-  const onDropZoneDrop = (idx: number) => {
-    if (!dragging) return
-
-    setGates(prev => {
-      const next = [...prev]
-      if (dragging.from === 'palette') {
-        next.splice(idx, 0, dragging.gate)
-      } else {
-        // reorder within circuit
-        const from = dragging.index
-        next.splice(from, 1)
-        const insertAt = idx > from ? idx - 1 : idx
-        next.splice(insertAt, 0, dragging.gate)
-      }
-      return next
-    })
-
-    endDrag()
-  }
-
-  const onPaletteOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setOverPalette(true)
-    setDropIndex(null)
-  }
-
-  const onPaletteDrop = () => {
-    // Dropping onto palette removes a circuit gate
-    if (dragging?.from === 'circuit') {
-      const idx = dragging.index
-      setGates(prev => prev.filter((_, i) => i !== idx))
-    }
-    endDrag()
-  }
-
-  // Click-to-add (alternative to drag)
-  const addGateClick = (gate: string) => setGates(prev => [...prev, gate])
-
-  // Click-to-remove
+  const addGate = (gate: string) => setGates(prev => [...prev, gate])
   const removeGate = (idx: number) => setGates(prev => prev.filter((_, i) => i !== idx))
-
-  // ── Derived ────────────────────────────────────────────────────────────────
+  const clearGates = () => setGates([])
 
   const availableGates = puzzleData?.available_gates?.length
     ? puzzleData.available_gates
     : ['H', 'X', 'Z']
 
-  const showHint = failCount >= 2 && puzzleData?.hint
-
-  const isDragging = dragging !== null
-
-  // ── Render ─────────────────────────────────────────────────────────────────
+  const mustUseRadar = step === 'result' && puzzleResult?.passed === true
+  const handleBackdrop = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget && !mustUseRadar) onClose()
+  }
 
   return (
-    <div
-      className="po-backdrop"
-      onMouseDown={e => e.target === e.currentTarget && onClose()}
-    >
+    <div className="po-backdrop" onMouseDown={handleBackdrop}>
       <div className="po-modal">
-        {/* Header */}
         <div className="po-header">
-          <span className="po-title">🔬 Radar Puzzle</span>
+          <span className="po-title">Radar Puzzle</span>
           {radarSize && step !== 'size' && (
-            <span className="po-size-badge">{radarSize} radar</span>
+            <span className="po-size-badge">{radarSize}</span>
           )}
-          <button className="po-close" onClick={onClose} aria-label="Close">×</button>
+          {!mustUseRadar && (
+            <button className="po-close" onClick={onClose} aria-label="Close">×</button>
+          )}
         </div>
 
-        {/* ── Step 1: Size selection ── */}
+        {/* Size selection */}
         {step === 'size' && (
           <div className="po-body">
-            <p className="po-subtitle">
-              Choose the radar scan size you want to unlock:
-            </p>
-
+            <p className="po-subtitle">Choose radar scan size.</p>
             <div className="po-size-row">
               {(['2x2', '3x3'] as RadarSize[]).map(sz => (
                 <button
@@ -235,27 +126,20 @@ export default function PuzzleOverlay({ onClose, onRadarUnlocked }: Props) {
                 >
                   <RadarGrid size={sz} />
                   <span className="po-size-label">{sz}</span>
-                  <span className="po-size-diff">
-                    {sz === '2x2' ? 'Easy puzzle' : 'Hard puzzle'}
-                  </span>
+                  <span className="po-size-diff">{sz === '2x2' ? 'Easy' : 'Hard'}</span>
                 </button>
               ))}
             </div>
-
             <div className="po-actions">
               <button className="po-btn-secondary" onClick={onClose}>Cancel</button>
-              <button
-                className="po-btn-primary"
-                onClick={confirmSize}
-                disabled={!radarSize}
-              >
-                Confirm →
+              <button className="po-btn-primary" onClick={confirmSize} disabled={!radarSize}>
+                Confirm
               </button>
             </div>
           </div>
         )}
 
-        {/* ── Loading ── */}
+        {/* Loading */}
         {step === 'loading' && (
           <div className="po-body po-loading">
             <div className="po-spinner" />
@@ -263,167 +147,95 @@ export default function PuzzleOverlay({ onClose, onRadarUnlocked }: Props) {
           </div>
         )}
 
-        {/* ── Step 2: Puzzle ── */}
+        {/* Puzzle */}
         {step === 'puzzle' && puzzleData && (
           <div className="po-body">
-            {/* Description */}
-            <p className="po-description">{puzzleData.description}</p>
+            <p className="po-description">{puzzleData.note}</p>
 
-            {/* Initial → Target states */}
             <div className="po-states">
               <div className="po-state-box po-initial">
                 <span className="po-state-lbl">Initial</span>
-                <span className="po-state-val">{puzzleData.initial}</span>
+                <span className="po-state-val">{puzzleData.initial_state}</span>
               </div>
               <span className="po-state-arrow">→</span>
               <div className="po-state-box po-target">
                 <span className="po-state-lbl">Target</span>
-                <span className="po-state-val">{puzzleData.target}</span>
+                <span className="po-state-val">{puzzleData.goal_state}</span>
               </div>
             </div>
 
-            {/* Hint (shown after 2 failures) */}
-            {showHint && (
-              <p className="po-hint">💡 Hint: {puzzleData.hint}</p>
-            )}
-
-            {/* Circuit drop area */}
             <div className="po-circuit-section">
-              <span className="po-section-lbl">Your Circuit</span>
-              <p className="po-circuit-help">
-                Drag gates from the palette into the circuit. Click a placed gate to remove it.
-              </p>
-
-              <div className={`po-circuit ${isDragging ? 'dragging' : ''}`}>
-                {/* Initial state label */}
-                <span className="po-circuit-edge">{puzzleData.initial} →</span>
-
-                {/* Drop zone before gate 0 */}
-                <DropZone
-                  index={0}
-                  active={isDragging && dropIndex === 0}
-                  onOver={e => onDropZoneOver(e, 0)}
-                  onDrop={() => onDropZoneDrop(0)}
-                  onLeave={() => setDropIndex(null)}
-                />
-
-                {gates.length === 0 && !isDragging && (
-                  <span className="po-circuit-empty">drop gates here</span>
+              <span className="po-section-lbl">Circuit - click a gate to remove it</span>
+              <div className="po-circuit">
+                <span className="po-circuit-edge">{puzzleData.initial_state}</span>
+                {gates.length === 0 && (
+                  <span className="po-circuit-empty">add gates from below</span>
                 )}
-
                 {gates.map((g, i) => (
-                  <div key={i} className="po-circuit-gate-wrap">
-                    <div
-                      className="po-circuit-gate"
-                      draggable
-                      onDragStart={() => startCircuitDrag(i, g)}
-                      onDragEnd={endDrag}
-                      onClick={() => removeGate(i)}
-                      title="Drag to reorder · click to remove"
-                      style={{
-                        borderColor: gateColor(g),
-                        color: gateColor(g),
-                        background: `${gateColor(g)}18`,
-                      }}
-                    >
-                      {g}
-                    </div>
-                    <DropZone
-                      index={i + 1}
-                      active={isDragging && dropIndex === i + 1}
-                      onOver={e => onDropZoneOver(e, i + 1)}
-                      onDrop={() => onDropZoneDrop(i + 1)}
-                      onLeave={() => setDropIndex(null)}
-                    />
-                  </div>
-                ))}
-
-                {/* Measure label */}
-                <span className="po-circuit-edge">→ measure</span>
-              </div>
-            </div>
-
-            {/* Gate palette */}
-            <div className="po-palette-section">
-              <span className="po-section-lbl">Available Gates</span>
-              <p className="po-palette-help">
-                Drag into circuit or click to append. Drop a circuit gate here to remove it.
-              </p>
-
-              <div
-                className={`po-palette ${overPalette && dragging?.from === 'circuit' ? 'drop-target' : ''}`}
-                onDragOver={onPaletteOver}
-                onDragLeave={() => setOverPalette(false)}
-                onDrop={onPaletteDrop}
-              >
-                {availableGates.map(g => (
-                  <div
-                    key={g}
-                    className="po-palette-gate"
-                    draggable
-                    onDragStart={() => startPaletteDrag(g)}
-                    onDragEnd={endDrag}
-                    onClick={() => addGateClick(g)}
-                    title={`Drag to add ${g} gate · click to append`}
-                    style={{
-                      borderColor: gateColor(g),
-                      color: gateColor(g),
-                    }}
+                  <button
+                    key={i}
+                    className="po-circuit-gate"
+                    onClick={() => removeGate(i)}
+                    title="Click to remove"
+                    style={{ borderColor: gateColor(g), color: gateColor(g), background: `${gateColor(g)}18` }}
                   >
                     {g}
-                  </div>
+                  </button>
                 ))}
+                <span className="po-circuit-edge">measure</span>
+              </div>
+            </div>
 
-                {overPalette && dragging?.from === 'circuit' && (
-                  <span className="po-palette-remove-hint">← drop to remove</span>
-                )}
+            <div className="po-palette-section">
+              <span className="po-section-lbl">Available Gates - click to add</span>
+              <div className="po-palette">
+                {availableGates.map(g => (
+                  <button
+                    key={g}
+                    className="po-palette-gate"
+                    onClick={() => addGate(g)}
+                    style={{ borderColor: gateColor(g), color: gateColor(g) }}
+                  >
+                    {g}
+                  </button>
+                ))}
               </div>
             </div>
 
             <div className="po-actions">
-              <button className="po-btn-secondary" onClick={onClose}>Cancel</button>
               <button className="po-btn-secondary" onClick={clearGates} disabled={!gates.length}>
                 Clear
               </button>
-              <button
-                className="po-btn-primary"
-                onClick={submitPuzzle}
-                disabled={!gates.length}
-              >
-                Submit →
+              <button className="po-btn-primary" onClick={submitPuzzle} disabled={!gates.length}>
+                Submit
               </button>
             </div>
           </div>
         )}
 
-        {/* ── Step 3: Result ── */}
+        {/* Result */}
         {step === 'result' && puzzleResult && (
           <div className="po-body">
             <div className={`po-result ${puzzleResult.passed ? 'pass' : 'fail'}`}>
               <span className="po-result-icon">{puzzleResult.passed ? '✓' : '✗'}</span>
               <div className="po-result-text">
-                <strong>{puzzleResult.passed ? 'Puzzle Solved!' : 'Incorrect Sequence'}</strong>
+                <strong>{puzzleResult.passed ? 'Solved' : 'Incorrect'}</strong>
                 <span>
-                  Measured target state with{' '}
-                  {Math.round(puzzleResult.probability * 100)}% probability
+                  {Math.round(puzzleResult.score * 100)}% target state probability
                   {puzzleResult.passed ? '' : ' (need ≥ 80%)'}
                 </span>
               </div>
             </div>
-
             <div className={`po-result-msg ${puzzleResult.passed ? 'pass' : 'fail'}`}>
               {puzzleResult.passed
-                ? `🎉 ${radarSize} radar scan is now available! Close this panel and use it on the board.`
-                : 'The gate sequence did not produce the target state. Try a different combination.'}
+                ? `${radarSize} radar ready. Use it now.`
+                : 'Incorrect sequence — turn passes to opponent.'}
             </div>
-
             <div className="po-actions">
-              {!puzzleResult.passed && (
-                <button className="po-btn-secondary" onClick={tryAgain}>
-                  Try Again
-                </button>
-              )}
-              <button className="po-btn-primary" onClick={onClose}>
+              <button
+                className="po-btn-primary"
+                onClick={() => radarSize && puzzleResult.passed ? onRadarUnlocked(radarSize) : onClose()}
+              >
                 {puzzleResult.passed ? 'Use Radar' : 'Close'}
               </button>
             </div>
@@ -431,26 +243,5 @@ export default function PuzzleOverlay({ onClose, onRadarUnlocked }: Props) {
         )}
       </div>
     </div>
-  )
-}
-
-// ── Drop zone helper component ────────────────────────────────────────────────
-
-interface DropZoneProps {
-  index: number
-  active: boolean
-  onOver: (e: React.DragEvent) => void
-  onDrop: () => void
-  onLeave: () => void
-}
-
-function DropZone({ active, onOver, onDrop, onLeave }: DropZoneProps) {
-  return (
-    <div
-      className={`po-drop-zone ${active ? 'active' : ''}`}
-      onDragOver={onOver}
-      onDrop={onDrop}
-      onDragLeave={onLeave}
-    />
   )
 }

@@ -65,6 +65,7 @@
 }
 .po-initial { border-color: #4af; }
 .po-target  { border-color: #4caf50; }
+.po-state-arrow { font-size: 1.3rem; color: #666; white-space: nowrap; }
 .po-state-lbl { font-size: .72rem; color: #ccc; text-transform: uppercase; letter-spacing: .6px; }
 .po-state-val { font-size: 1.35rem; font-weight: 700; font-family: monospace; }
 .po-initial .po-state-val { color: #4af; }

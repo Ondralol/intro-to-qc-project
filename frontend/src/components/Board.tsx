@@ -124,7 +124,7 @@ export default function Board({
                   }}>×</div>
                 )}
 
-                {isInRadar && (
+                {isInRadar && !isDestroyed && !isHit && !isMiss && (
                   <div style={{
                     position: 'absolute', inset: 0,
                     background: 'rgba(68, 170, 255, 0.08)',
@@ -132,7 +132,7 @@ export default function Board({
                   }} />
                 )}
 
-                {probability !== undefined && (
+                {probability !== undefined && !isDestroyed && !isHit && !isMiss && (
                   <>
                     <div style={{
                       position: 'absolute', inset: 0,
@@ -145,7 +145,7 @@ export default function Board({
                   </>
                 )}
 
-                {hasPing && (
+                {hasPing && !isInRadar && probability === undefined && (
                   <div style={{
                     position: 'absolute', inset: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',

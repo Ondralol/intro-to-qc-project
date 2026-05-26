@@ -161,7 +161,7 @@ export default function PuzzleOverlay({ onClose, onRadarUnlocked }: Props) {
                 <span className="po-state-lbl">Initial</span>
                 <span className="po-state-val">{puzzleData.initial_state}</span>
               </div>
-              <span className="po-state-arrow">→</span>
+              <span className="po-state-arrow">-&gt;</span>
               <div className="po-state-box po-target">
                 <span className="po-state-lbl">Target</span>
                 <span className="po-state-val">{puzzleData.goal_state}</span>

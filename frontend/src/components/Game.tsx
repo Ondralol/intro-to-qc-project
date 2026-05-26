@@ -8,6 +8,8 @@ interface Props {
   myId: string
   firstTurn: string
   myTargetColors: Record<string, string>
+  onPlayAgain: () => void
+  onReturnToMenu: () => void
 }
 
 interface ShotData {
@@ -22,7 +24,7 @@ interface RadarResult {
   scan: { cell: [number, number]; probability: number }[]
 }
 
-export default function Game({ myId, firstTurn, myTargetColors }: Props) {
+export default function Game({ myId, firstTurn, myTargetColors, onPlayAgain, onReturnToMenu }: Props) {
   const [currentTurn, setCurrentTurn] = useState(firstTurn)
   const [selectedCell, setSelectedCell] = useState<string | null>(null)
   const [selectedRadarOrigin, setSelectedRadarOrigin] = useState<[number, number] | null>(null)
@@ -41,8 +43,8 @@ export default function Game({ myId, firstTurn, myTargetColors }: Props) {
   const [enemyPings, setEnemyPings] = useState<Set<string>>(new Set())
 
   const [showPuzzle, setShowPuzzle] = useState(false)
-  // Set after solving a puzzle — player must use radar this turn
   const [radarUnlocked, setRadarUnlocked] = useState<RadarSize | null>(null)
+  const [opponentDisconnected, setOpponentDisconnected] = useState(false)
 
   const isMyTurn = currentTurn === myId
 
@@ -102,12 +104,18 @@ export default function Game({ myId, firstTurn, myTargetColors }: Props) {
       setSelectedRadarOrigin(null)
     })
 
+    socket.on('opponent_disconnected', () => {
+      setShowPuzzle(false)
+      setOpponentDisconnected(true)
+    })
+
     return () => {
       socket.off('shot_result')
       socket.off('shot_received')
       socket.off('game_over')
       socket.off('turn_changed')
       socket.off('radar_result')
+      socket.off('opponent_disconnected')
     }
   }, [myId])
 
@@ -228,6 +236,52 @@ export default function Game({ myId, firstTurn, myTargetColors }: Props) {
         />
       )}
 
+      {opponentDisconnected && (
+        <div style={{
+          position: 'fixed', inset: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: 'rgba(0, 0, 0, 0.75)',
+          zIndex: 100,
+        }}>
+          <div style={{
+            background: '#15182a',
+            border: '1px solid #2a2e42',
+            borderRadius: 12,
+            padding: '48px 64px',
+            textAlign: 'center',
+          }}>
+            <h1 style={{ fontSize: '2rem', margin: '0 0 12px', color: '#f55' }}>
+              Opponent Disconnected
+            </h1>
+            <p style={{ color: '#888', margin: '0 0 24px' }}>
+              Your opponent left the game.
+            </p>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+              <button
+                onClick={onPlayAgain}
+                style={{
+                  padding: '12px 32px', fontSize: '1rem', fontWeight: 600,
+                  background: '#3b7cff', border: 'none', borderRadius: 8,
+                  color: '#fff', cursor: 'pointer',
+                }}
+              >
+                Play Again
+              </button>
+              <button
+                onClick={onReturnToMenu}
+                style={{
+                  padding: '12px 24px', fontSize: '1rem',
+                  background: 'transparent', border: '1px solid #3a3a4a',
+                  borderRadius: 8, color: '#bbb', cursor: 'pointer',
+                }}
+              >
+                Main Menu
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {gameOver && (
         <div style={{
           position: 'fixed', inset: 0,
@@ -248,9 +302,24 @@ export default function Game({ myId, firstTurn, myTargetColors }: Props) {
             }}>
               {gameOver === 'win' ? 'You Win!' : 'You Lose'}
             </h1>
-            <p style={{ color: '#888', margin: 0 }}>
+            <p style={{ color: '#888', margin: '0 0 24px' }}>
               {gameOver === 'win' ? 'All enemy targets destroyed.' : 'All your targets were destroyed.'}
             </p>
+            <button
+              onClick={onPlayAgain}
+              style={{
+                padding: '12px 32px',
+                fontSize: '1rem',
+                fontWeight: 600,
+                background: '#3b7cff',
+                border: 'none',
+                borderRadius: 8,
+                color: '#fff',
+                cursor: 'pointer',
+              }}
+            >
+              Play Again
+            </button>
           </div>
         </div>
       )}

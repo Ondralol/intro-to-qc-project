@@ -42,10 +42,12 @@ function gateColor(g: string) {
 function RadarGrid({ size }: { size: RadarSize }) {
   const n = size === '2x2' ? 2 : 3
   return (
-    <div className="radar-grid" style={{ gridTemplateColumns: `repeat(${n}, 22px)` }}>
-      {Array.from({ length: n * n }).map((_, i) => (
-        <div key={i} className="radar-cell" />
-      ))}
+    <div className="po-size-card-grid">
+      <div className="radar-grid" style={{ gridTemplateColumns: `repeat(${n}, 28px)` }}>
+        {Array.from({ length: n * n }).map((_, i) => (
+          <div key={i} className="radar-cell" />
+        ))}
+      </div>
     </div>
   )
 }
@@ -104,10 +106,12 @@ export default function PuzzleOverlay({ onClose, onRadarUnlocked }: Props) {
     <div className="po-backdrop" onMouseDown={handleBackdrop}>
       <div className="po-modal">
         <div className="po-header">
-          <span className="po-title">Radar Puzzle</span>
-          {radarSize && step !== 'size' && (
-            <span className="po-size-badge">{radarSize}</span>
-          )}
+          <div className="po-header-center">
+            <span className="po-title">Radar Puzzle</span>
+            {radarSize && step !== 'size' && (
+              <span className="po-size-badge">{radarSize}</span>
+            )}
+          </div>
           {!mustUseRadar && (
             <button className="po-close" onClick={onClose} aria-label="Close">×</button>
           )}

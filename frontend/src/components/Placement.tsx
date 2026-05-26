@@ -31,12 +31,12 @@ const TARGET_COLOURS: Record<Size, { a: string; b: string }> = {
 const initPlacements = (): Placements =>
   Object.fromEntries(SIZES.map(s => [s, { anchor_a: [], anchor_b: [] }])) as unknown as Placements
 
-const DEBUG_PLACEMENTS: Placements = {
-  '1x1': { anchor_a: [[0, 0]],                          anchor_b: [[0, 2]] },
-  '1x2': { anchor_a: [[1, 0], [1, 1]],                  anchor_b: [[1, 3], [1, 4]] },
-  '1x3': { anchor_a: [[2, 0], [2, 1], [2, 2]],          anchor_b: [[2, 4], [2, 5], [2, 6]] },
-  '2x2': { anchor_a: [[4, 0], [4, 1], [5, 0], [5, 1]], anchor_b: [[4, 3], [4, 4], [5, 3], [5, 4]] },
-}
+// const DEBUG_PLACEMENTS: Placements = {
+//   '1x1': { anchor_a: [[0, 0]],                          anchor_b: [[0, 2]] },
+//   '1x2': { anchor_a: [[1, 0], [1, 1]],                  anchor_b: [[1, 3], [1, 4]] },
+//   '1x3': { anchor_a: [[2, 0], [2, 1], [2, 2]],          anchor_b: [[2, 4], [2, 5], [2, 6]] },
+//   '2x2': { anchor_a: [[4, 0], [4, 1], [5, 0], [5, 1]], anchor_b: [[4, 3], [4, 4], [5, 3], [5, 4]] },
+// }
 
 function isValidPartial(coords: Coord[], size: Size): boolean {
   if (coords.length <= 1) return true

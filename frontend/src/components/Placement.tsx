@@ -257,9 +257,9 @@ export default function Placement({ onConfirm }: Props) {
         <button onClick={() => { setPlacements(initPlacements()); setActiveAnchor('A'); setWarning(null); setSubmitError(null) }} disabled={submitted}>
           Reset
         </button>
-        <button onClick={() => { setPlacements(DEBUG_PLACEMENTS); setWarning(null); setSubmitError(null) }} disabled={submitted}>
+        {/*<button onClick={() => { setPlacements(DEBUG_PLACEMENTS); setWarning(null); setSubmitError(null) }} disabled={submitted}>
           Fill All (debug)
-        </button>
+        </button>*/}
       </div>
 
       {submitError && (

@@ -108,11 +108,14 @@ def handle_play_turn(data):
 
         elif turn_type == "submit_puzzle":
             result = game.submit_puzzle(request.sid, data.get("gates", []))
+            enemy_id = game.player_a_id if game.player_a_id != request.sid else game.player_b_id
+            if not result["passed"]:
+                game.current_turn = enemy_id
+                emit("turn_changed", {"current_turn": enemy_id}, to=game.game_id)
             emit("puzzle_result", {
                 "passed": result["passed"],
                 "score": result["score"],
-                "error": result.get("error"),
-            })
+            }, to=request.sid)
 
         elif turn_type == "submit_radar":
             if request.sid not in game.radar_ready:
@@ -123,7 +126,8 @@ def handle_play_turn(data):
             scan = game.radar_scan(request.sid, cells)
             enemy_id = game.player_a_id if game.player_a_id != request.sid else game.player_b_id
             game.current_turn = enemy_id
-            emit("radar_result", {"scan": scan, "next_turn": enemy_id})
+            emit("radar_result", {"scan": scan}, to=request.sid)
+            emit("turn_changed", {"current_turn": enemy_id}, to=game.game_id)
 
         else:
             emit("error", {"message": f"Unknown turn type: {turn_type}"})
